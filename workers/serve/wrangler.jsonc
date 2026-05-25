@@ -1,0 +1,28 @@
+{
+  "name": "itslive-serve",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "itslive-prod",
+      "database_id": "5c9c7362-a12a-4751-a7b9-5b7505c3bd66"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "dbcc7a8d8c87479c9ac4d8cce3ec2e88"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "SITES",
+      "bucket_name": "itslive-sites"
+    }
+  ]
+}

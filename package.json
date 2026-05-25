@@ -1,0 +1,15 @@
+{
+  "name": "itslive",
+  "private": true,
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "workerd", "sharp"]
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter itslive-api dev",
+    "dev:serve": "pnpm --filter itslive-serve dev",
+    "deploy:api": "pnpm --filter itslive-api deploy",
+    "deploy:serve": "pnpm --filter itslive-serve deploy",
+    "deploy:queue": "pnpm --filter itslive-queue deploy",
+    "deploy:all": "pnpm deploy:api && pnpm deploy:serve && pnpm deploy:queue"
+  }
+}
