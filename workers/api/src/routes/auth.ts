@@ -62,6 +62,16 @@ router.post('/signup', async c => {
 });
 
 router.post('/verify', async c => {
+  // Per-IP rate limit — prevents bulk OTP guessing across accounts with rotating email addresses
+  const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+  const ipWindow = Math.floor(Date.now() / (600 * 1000));
+  const ipKey = `verify_ip:${await sha256(ip)}:${ipWindow}`;
+  const ipCount = Number(await c.env.KV.get(ipKey) ?? '0');
+  if (ipCount >= 10) {
+    return c.json({ error: { code: 'RATE_LIMITED', message: 'Too many attempts. Try again later.' } }, 429);
+  }
+  await c.env.KV.put(ipKey, String(ipCount + 1), { expirationTtl: 600 });
+
   const body = await c.req.json().catch(() => null);
   const parsed = VerifySchema.safeParse(body);
   if (!parsed.success) {

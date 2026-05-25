@@ -52,4 +52,4 @@ export const RESERVED_NAMES = new Set([
   'null', 'undefined', 'itslive', 'about', 'contact', 'terms', 'privacy',
 ]);
 
-export const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+export const SLUG_PATTERN = /^(?!.*--)[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
