@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { sha256, generateApiKey, generateOtp } from '../lib/crypto';
+import { sha256, generateApiKey, generateOtp, timingSafeEqual } from '../lib/crypto';
 import { ulid } from '../lib/id';
 import type { Env } from '../types';
 import { authMiddleware } from '../middleware/auth';
@@ -83,7 +83,7 @@ router.post('/verify', async c => {
     return c.json({ error: { code: 'CODE_EXPIRED', message: 'Code expired or not found. Please request a new code.' } }, 400);
   }
 
-  if (stored !== code) {
+  if (!timingSafeEqual(stored, code)) {
     await c.env.KV.put(attemptsKey, String(attempts + 1), { expirationTtl: OTP_TTL });
     if (attempts + 1 >= MAX_ATTEMPTS) {
       await c.env.KV.delete(otpKey);

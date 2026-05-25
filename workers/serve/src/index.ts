@@ -44,7 +44,11 @@ export default {
     }
 
     const siteName = pathParts[0];
-    const filePath = pathParts.slice(1).join('/') || 'index.html';
+    const rawFilePath = pathParts.slice(1).join('/') || 'index.html';
+    const filePath = sanitizeFilePath(rawFilePath);
+    if (!filePath) {
+      return new Response('Bad request', { status: 400 });
+    }
 
     const site = await lookupSite(env, siteName);
 
@@ -124,6 +128,17 @@ async function getValidSession(request: Request, env: Env, site: SiteRecord): Pr
 }
 
 async function handleLogin(request: Request, env: Env, site: SiteRecord): Promise<Response> {
+  // Rate limit login attempts per site+IP to prevent PBKDF2 exhaustion
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const ipHash = await sha256(ip + site.id);
+  const window = Math.floor(Date.now() / (900 * 1000)); // 15-min window
+  const rateLimitKey = `login_rate:${ipHash}:${window}`;
+  const attempts = Number(await env.KV.get(rateLimitKey) ?? '0');
+  if (attempts >= 10) {
+    return loginPage(site.name, 'Too many attempts. Try again later.', 429);
+  }
+  await env.KV.put(rateLimitKey, String(attempts + 1), { expirationTtl: 900 });
+
   const form = await request.formData().catch(() => null);
   const password = form?.get('password');
 
@@ -296,6 +311,17 @@ function gone(siteName: string): Response {
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
+
+function sanitizeFilePath(raw: string): string | null {
+  const parts = raw.split('/').filter(Boolean);
+  const safe: string[] = [];
+  for (const part of parts) {
+    if (part === '..') return null;
+    if (part === '.') continue;
+    safe.push(part);
+  }
+  return safe.length === 0 ? 'index.html' : safe.join('/');
+}
 
 function parseCookie(header: string, name: string): string | null {
   for (const part of header.split(';')) {

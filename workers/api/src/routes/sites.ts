@@ -82,10 +82,20 @@ router.post('/', async c => {
   const siteId = ulid();
   const now = Date.now();
 
-  await c.env.DB
-    .prepare('INSERT INTO sites (id, user_id, name, slug_type, type, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(siteId, userId, siteName, slugType, type, 'active', now)
-    .run();
+  try {
+    await c.env.DB
+      .prepare('INSERT INTO sites (id, user_id, name, slug_type, type, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(siteId, userId, siteName, slugType, type, 'active', now)
+      .run();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('UNIQUE constraint failed')) {
+      const code = slugType === 'custom' ? 'NAME_TAKEN' : 'SLUG_GENERATION_FAILED';
+      const message = slugType === 'custom' ? 'This site name is already taken.' : 'Failed to generate a unique name. Please try again.';
+      return c.json({ error: { code, message } }, 409);
+    }
+    throw err;
+  }
 
   const url = siteUrl(c.env.SERVE_BASE_URL, siteName);
   return c.json({ site_id: siteId, url, slug_type: slugType, type, name: siteName, created_at: new Date(now).toISOString() }, 201);
@@ -96,7 +106,7 @@ router.post('/', async c => {
 router.get('/', async c => {
   const { userId } = c.get('auth');
   const sites = await c.env.DB
-    .prepare("SELECT id, name, slug_type, type, status, deployed_at, password_hash FROM sites WHERE user_id = ? AND status != 'deleted' ORDER BY created_at DESC")
+    .prepare("SELECT id, name, slug_type, type, status, deployed_at, password_hash FROM sites WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC")
     .bind(userId)
     .all<Site>();
 
@@ -121,15 +131,12 @@ router.get('/:name', async c => {
   const site = await getSiteForUser(c.env, userId, name);
   if (!site) return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
 
-  const deploys = await c.env.DB
-    .prepare('SELECT deployed_at, size_bytes, file_count, sha256, agent_ua FROM deploys WHERE site_id = ? ORDER BY deployed_at DESC LIMIT 5')
-    .bind(site.id)
-    .all<{ deployed_at: number; size_bytes: number; file_count: number; sha256: string; agent_ua: string | null }>();
-
-  const deployCount = await c.env.DB
-    .prepare('SELECT COUNT(*) as n FROM deploys WHERE site_id = ?')
-    .bind(site.id)
-    .first<{ n: number }>();
+  const [deploysRes, countRes] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT deployed_at, size_bytes, file_count, sha256, agent_ua FROM deploys WHERE site_id = ? ORDER BY deployed_at DESC LIMIT 5').bind(site.id),
+    c.env.DB.prepare('SELECT COUNT(*) as n FROM deploys WHERE site_id = ?').bind(site.id),
+  ]);
+  const deploys = deploysRes.results as { deployed_at: number; size_bytes: number; file_count: number; sha256: string; agent_ua: string | null }[];
+  const deployCount = countRes.results[0] as { n: number } | undefined;
 
   return c.json({
     name: site.name,
@@ -142,7 +149,7 @@ router.get('/:name', async c => {
     password_protected: site.password_hash !== null,
     session_ttl_hrs: site.session_ttl_hrs,
     deploy_count: deployCount?.n ?? 0,
-    last_5_deploys: (deploys.results ?? []).map(d => ({
+    last_5_deploys: deploys.map(d => ({
       deployed_at: new Date(d.deployed_at).toISOString(),
       size_bytes: d.size_bytes,
       file_count: d.file_count,
@@ -352,17 +359,14 @@ async function generateUniqueSlug(env: Env): Promise<string> {
 }
 
 async function revokeAllSessions(env: Env, siteId: string): Promise<number> {
-  // List sessions for this site then delete individually (KV has no atomic prefix delete)
   const prefix = `session:${siteId}:`;
   let count = 0;
   let cursor: string | undefined;
 
   do {
     const list = await env.KV.list({ prefix, limit: 1000, cursor });
-    for (const key of list.keys) {
-      await env.KV.delete(key.name);
-      count++;
-    }
+    await Promise.all(list.keys.map(k => env.KV.delete(k.name)));
+    count += list.keys.length;
     cursor = list.list_complete ? undefined : list.cursor;
   } while (cursor);
 
