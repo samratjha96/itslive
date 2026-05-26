@@ -603,7 +603,7 @@
             Copy
           </button>
         </div>
-        <div class="prompt-body" id="prompt-text">Read <strong>https://api.itslive.dev/llms.txt</strong> and deploy a site for me.
+        <div class="prompt-body" id="prompt-text">Read <strong>https://itslive-api.zasamrat.workers.dev/llms.txt</strong> and deploy a site for me.
 
 My email: <em>[your email here]</em>
 
@@ -662,22 +662,22 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
         </div>
         <div class="terminal-body" style="font-size:12px;line-height:1.85;padding:20px">
 <span class="t-comment"># 1. Request a code</span><br>
-<span class="t-cmd">curl</span> -X POST https://api.itslive.dev/signup \<br>
+<span class="t-cmd">curl</span> -X POST https://itslive-api.zasamrat.workers.dev/signup \<br>
 &nbsp;&nbsp;-d '{"email":"you@example.com"}'<br>
 <span class="t-res">→ "Check your email for a code."</span><br>
 <br>
 <span class="t-comment"># You paste: AH7X2K9</span><br>
-<span class="t-cmd">curl</span> -X POST https://api.itslive.dev/verify \<br>
+<span class="t-cmd">curl</span> -X POST https://itslive-api.zasamrat.workers.dev/verify \<br>
 &nbsp;&nbsp;-d '{"email":"you@example.com","code":"AH7X2K9"}'<br>
 <span class="t-res">→ {"api_key": "il_live_..."}</span><br>
 <br>
 <span class="t-comment"># 2. Create a site</span><br>
-<span class="t-cmd">curl</span> -X POST https://api.itslive.dev/sites \<br>
+<span class="t-cmd">curl</span> -X POST https://itslive-api.zasamrat.workers.dev/sites \<br>
 &nbsp;&nbsp;-H "X-API-Key: il_live_..."<br>
 <span class="t-res">→ {"url": "https://violet-crane-42.itslive.dev"}</span><br>
 <br>
 <span class="t-comment"># 3. Publish your site</span><br>
-<span class="t-cmd">curl</span> -X PUT https://api.itslive.dev/sites/violet-crane-42 \<br>
+<span class="t-cmd">curl</span> -X PUT https://itslive-api.zasamrat.workers.dev/sites/violet-crane-42 \<br>
 &nbsp;&nbsp;-H "X-API-Key: il_live_..." \<br>
 &nbsp;&nbsp;--data-binary @mysite.zip<br>
 <span class="t-ok">✓ Live at https://violet-crane-42.itslive.dev</span>
@@ -832,7 +832,7 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
     <div class="section-label">API Reference</div>
     <h2>The docs live at a URL.</h2>
     <p>We don't list endpoints on marketing pages — they'd be stale the moment we ship something new. The canonical reference is a plain-text file at a stable URL, formatted so both humans and AI agents can read it directly.</p>
-    <a href="https://api.itslive.dev/llms.txt" target="_blank">
+    <a href="https://itslive-api.zasamrat.workers.dev/llms.txt" target="_blank">
       Read the API docs
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
@@ -848,7 +848,7 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
   <ul class="footer-links">
     <li><a href="#how">How it works</a></li>
     <li><a href="#pricing">Pricing</a></li>
-    <li><a href="https://api.itslive.dev/llms.txt" target="_blank">llms.txt</a></li>
+    <li><a href="https://itslive-api.zasamrat.workers.dev/llms.txt" target="_blank">llms.txt</a></li>
   </ul>
 </footer>
 
