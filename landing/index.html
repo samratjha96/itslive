@@ -291,7 +291,8 @@
       flex-shrink: 0; width: 22px; padding-top: 1px;
     }
     .how-step-content h3 {
-      font-size: 14px; font-weight: 600; margin-bottom: 3px;
+      font-size: 13px; font-weight: 600; margin-bottom: 3px;
+      font-family: var(--mono); color: var(--accent);
     }
     .how-step-content p { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0; }
     .how-terminal {
@@ -625,34 +626,34 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
   <div class="how-inner">
     <div>
       <div class="how-label">03 / How it works</div>
-      <h2>From idea to live URL<br>in under a minute.</h2>
+      <h2>Four API calls.<br>That's the whole thing.</h2>
       <div class="how-steps">
         <div class="how-step">
           <span class="how-step-num">01</span>
           <div class="how-step-content">
-            <h3>You do one thing</h3>
-            <p>Check your email, copy the six-digit code, paste it to your AI. That's it. You're done.</p>
+            <h3>POST /signup</h3>
+            <p>Send your email. We reply with a 6-character code — nothing is stored until you verify.</p>
           </div>
         </div>
         <div class="how-step">
           <span class="how-step-num">02</span>
           <div class="how-step-content">
-            <h3>Your AI gets access</h3>
-            <p>A key arrives in the response body — no dashboard to open, no settings page, no redirect.</p>
+            <h3>POST /verify</h3>
+            <p>Return the code. An API key comes back in the response body. That's your credential, forever.</p>
           </div>
         </div>
         <div class="how-step">
           <span class="how-step-num">03</span>
           <div class="how-step-content">
-            <h3>A URL is ready instantly</h3>
-            <p>A globally-unique address is auto-generated. Custom names available on paid plans.</p>
+            <h3>POST /sites</h3>
+            <p>Create a site. Get a globally-unique live URL in the response. No configuration, no naming required.</p>
           </div>
         </div>
         <div class="how-step">
           <span class="how-step-num">04</span>
           <div class="how-step-content">
-            <h3>Your site goes live</h3>
-            <p>Upload HTML, CSS, JS, and images. The whole site is online within a second. No build step.</p>
+            <h3>PUT /sites/{name}</h3>
+            <p>Upload a ZIP of your files. The old version stays live until the new one is fully in place.</p>
           </div>
         </div>
       </div>
