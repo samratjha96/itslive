@@ -219,7 +219,7 @@ async function serveFile(env: Env, site: SiteRecord, filePath: string, request: 
     if (filePath !== 'index.html') {
       const fallback = await env.SITES.get(`${prefix}/index.html`);
       if (fallback) {
-        return r2ToResponse(fallback, 'text/html; charset=utf-8');
+        return r2ToResponse(fallback, 'text/html; charset=utf-8', site.password_protected);
       }
     }
     return notFound(site.name);
@@ -227,18 +227,27 @@ async function serveFile(env: Env, site: SiteRecord, filePath: string, request: 
 
   // R2Object without body = etag condition matched → 304 Not Modified
   if (!('body' in object)) {
-    return new Response(null, { status: 304, headers: { ETag: object.httpEtag } });
+    const h304: Record<string, string> = { ETag: object.httpEtag };
+    if (site.password_protected) {
+      h304['Cache-Control'] = 'private, no-store';
+      h304['Vary'] = 'Cookie';
+    }
+    return new Response(null, { status: 304, headers: h304 });
   }
 
   const contentType = object.httpMetadata?.contentType ?? 'application/octet-stream';
-  return r2ToResponse(object, contentType);
+  return r2ToResponse(object, contentType, site.password_protected);
 }
 
-function r2ToResponse(object: R2ObjectBody, contentType: string): Response {
+function r2ToResponse(object: R2ObjectBody, contentType: string, isProtected = false): Response {
   const headers = new Headers(SECURITY_HEADERS);
   headers.set('Content-Type', contentType);
   headers.set('ETag', object.httpEtag);
-  if (object.httpMetadata?.cacheControl) {
+  if (isProtected) {
+    // Never let intermediaries cache protected content
+    headers.set('Cache-Control', 'private, no-store');
+    headers.set('Vary', 'Cookie');
+  } else if (object.httpMetadata?.cacheControl) {
     headers.set('Cache-Control', object.httpMetadata.cacheControl);
   } else {
     headers.set('Cache-Control', 'public, max-age=300');

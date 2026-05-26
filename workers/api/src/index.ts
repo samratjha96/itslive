@@ -18,159 +18,181 @@ app.get('/', c => c.json({ name: 'ItsLive API', version: '1.0.0', status: 'ok' }
 app.get('/llms.txt', c => {
   const base = 'https://itslive-api.zasamrat.workers.dev';
   const serveBase = 'https://itslive-serve.zasamrat.workers.dev';
-  return c.text(`# ItsLive
+  return c.text(`# ItsLive API — Agent Instructions
 
-Web hosting for AI agents. Zero dashboards. Deploy HTML to the public internet with 3 API calls.
+Deploy websites to the public internet with a few API calls.
+No OAuth flows. No dashboards. No build step.
 
-## Base URL
-${base}
+Base URL: ${base}
 
-## Authentication
-All authenticated requests require the header:
-  X-API-Key: il_live_{key}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 0 — DO THIS FIRST, EVERY SESSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Never send the key in query params or request body — the API rejects it with KEY_IN_URL.
-Test-environment keys use the prefix il_test_ and work identically.
+Ask the user: "Do you already have an ItsLive API key?"
 
-## Onboarding
+  YES → Use it immediately as: X-API-Key: il_live_...
+        Skip to STEP 2.
 
-The signup + verify flow works for both new and returning users.
+  NO  → Follow STEP 1 below to get one.
 
-Step 1: Request a verification code
-  POST /signup
-  {"email": "user@example.com"}
-  → {"message": "Check your email for a verification code."}
+  LOST → Same as NO. The signup+verify flow resets their key.
 
-  In non-production environments the response also includes:
-  → {"message": "...", "dev_code": "ABC123"}
-  Use dev_code directly in Step 2 — no email check needed.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — GET AN API KEY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Step 2: Verify and receive the API key
-  POST /verify
-  {"email": "user@example.com", "code": "ABC123"}
-  → {"api_key": "il_live_...", "user_id": "..."}
+Works for new accounts and lost-key recovery. The flow is identical.
 
-Store the api_key. It will not be shown again. Tell the user to save it somewhere
-safe (e.g. a .env file or password manager) — they will need to supply it in future
-sessions instead of going through verification again.
+1a. Request a code:
+    POST /signup
+    {"email": "user@example.com"}
+    → {"message": "Check your email for a verification code."}
 
-At the start of any new session, ask the user if they already have an ItsLive API
-key before attempting signup. If they provide one, use it directly — skip Steps 1-2.
+    Dev/test environments also return "dev_code": "ABC123" in the response.
+    Use it directly in 1b — no email needed.
 
-Returning user / lost key: if the user has lost their key, they can recover access
-by repeating the signup + verify flow with the same email. /verify will issue a new
-key and mark the old one rotated (60-second grace period on the old key). The flow
-is identical to new-user onboarding — the user just needs to check their email again.
+1b. Ask the user for the 6-character code from their email.
 
-To rotate a key without losing access (has current key):
+1c. Verify and receive the key:
+    POST /verify
+    {"email": "user@example.com", "code": "ABC123"}
+    → {"api_key": "il_live_...", "user_id": "..."}
+
+1d. Tell the user to save their API key somewhere safe (e.g. a .env file or
+    password manager). They should paste it into future sessions instead of
+    going through verification again. The key will not be shown again.
+
+Returning users: /verify issues a new key and marks the old one rotated.
+The old key remains valid for 60 seconds so any in-flight requests complete.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — DEPLOY A SITE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2a. Create a site and get a URL:
+    POST /sites
+    X-API-Key: il_live_...
+    {}
+    → 201 {"name": "violet-crane-42", "url": "${serveBase}/violet-crane-42",
+           "site_id": "...", "slug_type": "auto", "created_at": "..."}
+
+    Use the "name" from this response in step 2b.
+
+    Custom name (Builder plan+): send {"name": "your-project"} in the body.
+    Rules: 3-40 chars, lowercase alphanumeric and hyphens, no consecutive hyphens.
+
+2b. Upload files (site goes live immediately on success):
+    PUT /sites/{name}
+    X-API-Key: il_live_...
+
+    Single HTML file:
+      Content-Type: text/html
+      <html content>
+
+    Multi-file site (ZIP — must contain index.html at root):
+      Content-Type: application/zip
+      <zip bytes>
+
+    Multi-file via multipart:
+      Content-Type: multipart/form-data
+      <files as form fields>
+
+    → {"url": "...", "deploy_id": "...", "deployed_at": "...",
+       "size_bytes": ..., "file_count": ...}
+
+2c. Show the user the "url" from the response. That is their live site.
+
+To update a site: run step 2b again with the same name.
+Deploy is atomic — old version stays live until the new upload completes fully.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OTHER OPERATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+List sites:     GET /sites
+Site details:   GET /sites/{name}       includes last 5 deploys
+Delete site:    DELETE /sites/{name}    30-day cooling; URL returns 410 during cooling
+Usage/quotas:   GET /usage             sites used, storage, deploys this month, API calls this hour
+Account info:   GET /account
+
+Password-protect a site:
+  PUT /sites/{name}/access
+  {"password": "secret", "session_ttl_hrs": 24}
+  session_ttl_hrs: 1-168 (hours), default 24
+
+Remove protection:   DELETE /sites/{name}/access
+Revoke sessions:     POST /sites/{name}/access/revoke
+
+Rotate key (user has current key and wants a new one):
   POST /keys/rotate
   X-API-Key: il_live_...
   → {"api_key": "il_live_...(new)"}
-  Old key valid for 60s after rotation.
+  Tell the user to save the new key. Old key valid 60s.
 
-## Deploy a site
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ERROR HANDLING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Create site (auto-generated name, free plan):
-  POST /sites
-  X-API-Key: il_live_...
-  {}
-  → 201 {"site_id": "...", "name": "bright-rune-77", "url": "${serveBase}/bright-rune-77",
-         "slug_type": "auto", "created_at": "..."}
+All errors: {"error": {"code": "...", "message": "..."}}
 
-Create site with a custom name (Builder plan or higher):
-  POST /sites
-  X-API-Key: il_live_...
-  {"name": "my-custom-site"}
-  → 201 {"site_id": "...", "name": "my-custom-site", "url": "${serveBase}/my-custom-site",
-         "slug_type": "custom", "created_at": "..."}
+What to do for each code:
 
-  Name rules: 3-40 chars, lowercase alphanumeric and hyphens, no consecutive hyphens.
+  RATE_LIMITED                → Wait for Retry-After seconds, then retry
+  MISSING_KEY                 → Add X-API-Key header to the request
+  INVALID_KEY                 → Key is wrong or account not found; re-verify via email (Step 1)
+  KEY_IN_URL                  → Move key to X-API-Key header, never query params
+  KEY_ROTATED                 → Ask user for their current key; old one has expired
 
-Deploy HTML (site goes live instantly):
-  PUT /sites/{name}
-  X-API-Key: il_live_...
-  Content-Type: text/html
-  <body>Hello world</body>
-  → {"url": "...", "deploy_id": "...", "deployed_at": "...", "size_bytes": ..., "file_count": ...}
+  CODE_INVALID                → Wrong code; ask user to check email and try again (max 5 attempts)
+  CODE_EXPIRED                → OTP expired or locked after 5 failures; call POST /signup again
+  EMAIL_INVALID               → Ask user to check their email address
 
-Deploy a ZIP archive (multi-file sites):
-  PUT /sites/{name}
-  X-API-Key: il_live_...
-  Content-Type: application/zip
-  <zip file bytes — must contain index.html at root>
+  PLAN_LIMIT_REACHED          → Check GET /usage; free plan allows 3 sites, 5 MB, 50 deploys/month
+  CUSTOM_SLUG_REQUIRES_PAID_PLAN → Omit "name" from POST /sites body to use auto-generated name
+  NAME_TAKEN                  → Name is in use or cooling; choose a different name
+  NAME_INVALID                → Fix: 3-40 chars, lowercase alphanumeric + hyphens, no consecutive hyphens
+  NAME_RESERVED               → Choose a different name
 
-Deploy multi-file via multipart:
-  PUT /sites/{name}
-  X-API-Key: il_live_...
-  Content-Type: multipart/form-data
-  <files as form fields>
+  FILE_TOO_LARGE              → Reduce files; free plan limit is 5 MB per deploy
+  NO_FILES                    → Check that request body contains file content
+  ENTRYPOINT_MISSING          → ZIP must include index.html at the root level
+  INVALID_ZIP                 → ZIP file is corrupt or not a valid archive
 
-## All Endpoints
+  SITE_NOT_FOUND              → Confirm site name is correct; use GET /sites to list existing sites
 
-No auth required:
-  POST /signup              {"email": string}
-  POST /verify              {"email": string, "code": string}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PLANS & LIMITS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Auth required:
-  POST /keys/rotate         Rotate API key; old key valid 60s grace period
-  GET  /account             User info and plan
-  GET  /usage               Site count, storage, deploy usage this month
+  free:    3 sites · 5 MB/deploy · 50 deploys/month · 100 API calls/hour
+  builder: 25 sites · 25 MB/deploy · 500 deploys/month · 1,000 API calls/hour
+  studio:  200 sites · 100 MB/deploy · unlimited deploys · 10,000 API calls/hour
 
-  POST   /sites             Create site; body: {} or {"name": "custom-slug"}
-  GET    /sites             List active sites
-  GET    /sites/{name}      Site details + last 5 deploys
-  PUT    /sites/{name}      Deploy content (HTML, ZIP, or multipart)
-  DELETE /sites/{name}      Delete site (30-day cooling period)
+Custom site names require Builder plan or higher.
+All other features are available on the free plan.
 
-  PUT    /sites/{name}/access        {"password": string, "session_ttl_hrs": number (1-168, default 24)}
-  DELETE /sites/{name}/access        Remove password protection
-  POST   /sites/{name}/access/revoke Invalidate all active sessions
+Rate limits:
+  POST /signup: 10/10 min per IP (silently enforced — success response either way)
+  POST /verify: 10/10 min per IP · 5 wrong codes locks the OTP
+  Authenticated: see plan limits above
 
-## Plans
-  free:    3 sites, 5 MB/deploy, 50 deploys/month, 100 API calls/hour
-  builder: 25 sites, 25 MB/deploy, 500 deploys/month, 1000 API calls/hour
-  studio:  200 sites, 100 MB/deploy, unlimited deploys, 10000 API calls/hour
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AUTHENTICATION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Free plan: auto-generated site names only. Custom names require Builder+.
+Header:  X-API-Key: il_live_{key}
+Never put the key in a URL — the API rejects it with KEY_IN_URL.
+Test environment keys use the prefix il_test_ and behave identically.
 
-## Error Format
-  {"error": {"code": "RATE_LIMITED", "message": "..."}}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SITE SERVING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-## Error Codes
-  MISSING_KEY                  No X-API-Key header
-  INVALID_KEY                  Key not found or invalid
-  KEY_IN_URL                   Key sent in query param — use header
-  KEY_ROTATED                  Key was rotated; use new key
-  RATE_LIMITED                 Rate limit exceeded; see Retry-After header
-  PLAN_LIMIT_REACHED           Site/deploy/storage limit for plan
-  SITE_NOT_FOUND               Site does not exist or belongs to another user
-  NAME_TAKEN                   Custom name already in use or in cooling period
-  NAME_INVALID                 Name must be 3-40 chars, lowercase alphanumeric + hyphens, no consecutive hyphens
-  NAME_RESERVED                Name is on the platform reserved list
-  CUSTOM_SLUG_REQUIRES_PAID_PLAN  Custom names require Builder plan or higher
-  FILE_TOO_LARGE               Deploy exceeds plan size limit
-  NO_FILES                     No files found in deploy request
-  ENTRYPOINT_MISSING           Deploy has no index.html
-  INVALID_ZIP                  Could not parse ZIP archive
-  EMAIL_INVALID                Malformed email address
-  CODE_INVALID                 Wrong OTP
-  CODE_EXPIRED                 OTP expired or max attempts (5) exceeded
-
-## Rate Limits
-  POST /signup: 10 per 10 min per IP (silent — same response whether limited or not)
-  POST /verify: 10 per 10 min per IP; 5 failed attempts locks the OTP
-  Authenticated endpoints: 100–10000 per hour per API key (plan-dependent)
-
-## Site Serving
-  Sites served at: ${serveBase}/{site-name}
-  SPA routing: requests to missing paths fall back to index.html automatically
-  Cache: responses cached at Cloudflare edge for 300s by default
-  Custom TTL: set X-Cache-TTL header on PUT /sites/{name} (30–86400 seconds)
-
-## Notes
-  - Site names are permanent after creation — no rename
-  - Deleted sites enter a 30-day cooling period; URL returns 410 Gone during cooling
-  - Deploy is atomic: old version stays live until new upload fully completes
+Sites live at: ${serveBase}/{name}
+SPA routing: missing paths fall back to index.html automatically
+Cache TTL: 300s default · override with X-Cache-TTL header on PUT /sites/{name} (30–86400s)
+Site names are permanent — no rename after creation
 `);
 });
 

@@ -40,6 +40,15 @@ router.post('/signup', async c => {
   await c.env.KV.put(ipKey, String(ipCount + 1), { expirationTtl: 600 });
 
   const emailHash = await sha256(email);
+
+  // Per-email cooldown to prevent spamming someone else's inbox
+  const emailCooldownKey = `signup_cooldown:${emailHash}`;
+  const recentlySent = await c.env.KV.get(emailCooldownKey);
+  if (recentlySent) {
+    return c.json(SIGNUP_RESPONSE, 200); // Silent — no email sent
+  }
+  await c.env.KV.put(emailCooldownKey, '1', { expirationTtl: 120 });
+
   const code = generateOtp();
 
   // Invalidate any previous OTP for this email
