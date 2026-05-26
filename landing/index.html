@@ -114,16 +114,87 @@
     }
     .btn-outline:hover { background: var(--surface); }
 
-    /* Hero terminal (right column) */
+    /* Hero chat (right column) */
     .hero-right {
       background: var(--surface);
       display: flex; align-items: center; justify-content: center;
       padding: 60px 48px;
     }
-    .hero-terminal {
+    .hero-chat {
       width: 100%; max-width: 520px;
-      border: 2px solid var(--border);
+      background: #faf8f4;
+      border: 1.5px solid rgba(17,16,8,.18);
+      border-radius: 10px; overflow: hidden;
+      box-shadow: 0 8px 32px -8px rgba(17,16,8,.12);
     }
+    .chat-header {
+      padding: 11px 16px; border-bottom: 1px solid rgba(17,16,8,.1);
+      background: #fff;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .chat-header-brand {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 13px; font-weight: 600; color: var(--text);
+    }
+    .chat-header-model {
+      font-family: var(--mono); font-size: 10px; color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    .chat-body {
+      padding: 18px 16px; display: flex; flex-direction: column; gap: 0;
+    }
+    .chat-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; }
+    .chat-row-user { flex-direction: row-reverse; }
+    .chat-avatar {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--text); color: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+    }
+    .chat-text {
+      font-size: 13px; line-height: 1.6; color: var(--text);
+      max-width: calc(100% - 34px);
+    }
+    .chat-pill {
+      display: inline-block; background: var(--text); color: var(--bg);
+      padding: 8px 13px; border-radius: 16px 16px 4px 16px;
+      font-size: 13px; line-height: 1.5; max-width: 80%;
+    }
+    .chat-divider {
+      height: 1px; background: rgba(17,16,8,.07);
+      margin: 4px -16px 14px;
+    }
+    /* Thinking block */
+    .chat-thinking {
+      margin-bottom: 10px;
+      border: 1px solid rgba(17,16,8,.1);
+      border-radius: 6px; overflow: hidden;
+    }
+    .chat-thinking-hd {
+      padding: 7px 11px; background: rgba(17,16,8,.03);
+      border-bottom: 1px solid rgba(17,16,8,.07);
+      display: flex; align-items: center; gap: 7px;
+      font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+      letter-spacing: 0.03em;
+    }
+    .think-dot {
+      width: 5px; height: 5px; background: var(--accent);
+      border-radius: 50%; flex-shrink: 0;
+    }
+    .chat-thinking-body {
+      padding: 9px 11px; font-family: var(--mono);
+      font-size: 11px; line-height: 1.9; color: #7a7068;
+    }
+    .tc-ok { color: #22a060; margin-right: 5px; }
+    .tc-ep { color: var(--text); font-weight: 500; }
+    .tc-res { color: #a09890; }
+    .chat-url {
+      font-family: var(--mono); font-size: 12.5px; font-weight: 500;
+      color: var(--accent); text-decoration: underline;
+      text-underline-offset: 2px; text-decoration-thickness: 1px;
+    }
+
+    /* Shared terminal styles (used in how-it-works) */
     .terminal-titlebar {
       background: var(--text);
       padding: 10px 16px;
@@ -507,32 +578,56 @@
     </div>
   </div>
   <div class="hero-right">
-    <div class="hero-terminal">
-      <div class="terminal-titlebar">
-        <div class="terminal-dots">
-          <div class="terminal-dot"></div>
-          <div class="terminal-dot"></div>
-          <div class="terminal-dot"></div>
+    <div class="hero-chat">
+      <div class="chat-header">
+        <div class="chat-header-brand">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" fill="#cc785c" opacity=".85"/>
+          </svg>
+          Claude
         </div>
-        <span>your AI's session</span>
-        <span style="opacity:0">&nbsp;</span>
+        <span class="chat-header-model">claude-opus-4</span>
       </div>
-      <div class="terminal-body">
-<span class="t-comment"># Your AI asks for your email</span><br>
-<span class="t-cmd">POST</span> /signup  <span class="t-res">→ "Check your email for a code."</span><br>
-<br>
-<span class="t-comment"># You paste the code back (once, ever)</span><br>
-<span class="t-cmd">POST</span> /verify  <span class="t-res">{"code": "AH7X2K9"}</span><br>
-<span class="t-res">&nbsp;&nbsp;→ {"api_key": "il_live_..."}</span><br>
-<br>
-<span class="t-comment"># Create a site, get a URL</span><br>
-<span class="t-cmd">POST</span> /sites<br>
-<span class="t-res">&nbsp;&nbsp;→ {"url": "violet-crane-42.itslive.fyi"}</span><br>
-<br>
-<span class="t-comment"># Publish (HTML, CSS, JS, images — all of it)</span><br>
-<span class="t-cmd">PUT&nbsp;</span> /sites/violet-crane-42  <span class="t-res">@mysite.zip</span><br>
-<br>
-<span class="t-ok">✓ Live at violet-crane-42.itslive.fyi</span>
+      <div class="chat-body">
+
+        <div class="chat-row">
+          <div class="chat-avatar">C</div>
+          <div class="chat-text">
+            I've finished your team dashboard — charts are pulling live data. Looks sharp. It's a local file right now, only you can see it.
+          </div>
+        </div>
+
+        <div class="chat-divider"></div>
+
+        <div class="chat-row chat-row-user">
+          <div class="chat-pill">
+            Use itslive.fyi to deploy it so the whole team can see it.
+          </div>
+        </div>
+
+        <div class="chat-divider"></div>
+
+        <div class="chat-row">
+          <div class="chat-avatar">C</div>
+          <div style="flex:1;min-width:0">
+            <div class="chat-thinking">
+              <div class="chat-thinking-hd">
+                <div class="think-dot"></div>
+                Used ItsLive API&thinsp;·&thinsp;4 calls
+              </div>
+              <div class="chat-thinking-body">
+                <span class="tc-ok">✓</span><span class="tc-ep">POST /signup&nbsp;</span><span class="tc-res">→ code sent to email</span><br>
+                <span class="tc-ok">✓</span><span class="tc-ep">POST /verify&nbsp;</span><span class="tc-res">→ api_key: il_live_···</span><br>
+                <span class="tc-ok">✓</span><span class="tc-ep">POST /sites&nbsp;&nbsp;</span><span class="tc-res">→ URL assigned</span><br>
+                <span class="tc-ok">✓</span><span class="tc-ep">PUT&nbsp; /sites/violet-crane-42</span>
+              </div>
+            </div>
+            <div class="chat-text">
+              Done. Your dashboard is live at <a href="#" class="chat-url">violet-crane-42.itslive.fyi</a> — paste the link in Slack.
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
