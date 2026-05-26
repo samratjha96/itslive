@@ -261,49 +261,47 @@
     }
 
     /* HOW IT WORKS */
-    .how { border-bottom: 2px solid var(--border); }
-    .how-header {
-      padding: 48px 48px 32px; border-bottom: 2px solid var(--border);
-      display: flex; align-items: baseline; gap: 24px;
-    }
-    .how-header h2 {
-      font-size: clamp(26px, 3vw, 40px); font-weight: 700;
-      letter-spacing: -0.03em; text-transform: uppercase;
-    }
-    .how-body {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 0;
-    }
-    .how-steps { border-right: 2px solid var(--border); }
-    .how-step {
-      display: grid; grid-template-columns: 80px 1fr;
+    .how {
       border-bottom: 2px solid var(--border);
+      padding: 88px 48px;
     }
-    .how-step:last-child { border-bottom: none; }
+    .how-inner {
+      max-width: 1280px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1.2fr;
+      gap: 80px; align-items: start;
+    }
+    .how-label {
+      font-family: var(--mono); font-size: 10px; font-weight: 500;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 16px;
+    }
+    .how-inner h2 {
+      font-size: clamp(30px, 3.2vw, 48px); font-weight: 700;
+      letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 36px;
+    }
+    .how-steps { display: flex; flex-direction: column; }
+    .how-step {
+      display: flex; gap: 18px; padding: 18px 0;
+      border-top: 1px solid rgba(17,16,8,.14);
+    }
+    .how-step:last-child { border-bottom: 1px solid rgba(17,16,8,.14); }
     .how-step-num {
-      padding: 28px 24px;
       font-family: var(--mono); font-size: 11px; font-weight: 500;
-      letter-spacing: 0.06em; color: var(--muted);
-      border-right: 2px solid var(--border);
-      display: flex; align-items: flex-start; padding-top: 32px;
+      color: var(--accent); letter-spacing: 0.06em;
+      flex-shrink: 0; width: 22px; padding-top: 1px;
     }
-    .how-step-content { padding: 28px 32px; }
     .how-step-content h3 {
-      font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
-      text-transform: uppercase; margin-bottom: 6px;
+      font-size: 14px; font-weight: 600; margin-bottom: 3px;
     }
-    .how-step-content p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+    .how-step-content p { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0; }
     .how-terminal {
-      padding: 48px; background: var(--surface);
-      display: flex; align-items: flex-start;
+      border: 1.5px solid rgba(17,16,8,.18);
+      border-radius: 8px; overflow: hidden;
+      box-shadow: 0 4px 20px -4px rgba(17,16,8,.12);
     }
-    .how-terminal-inner {
-      width: 100%; border: 2px solid var(--border);
-    }
-    .how-terminal-inner .terminal-titlebar { /* reuse */ }
-    .how-terminal-inner .terminal-body { font-size: 12px; line-height: 1.85; padding: 20px; }
+    .how-terminal .terminal-body { font-size: 12px; line-height: 1.85; padding: 20px; }
     @media (max-width: 900px) {
-      .how-body { grid-template-columns: 1fr; }
-      .how-steps { border-right: none; }
+      .how-inner { grid-template-columns: 1fr; gap: 48px; }
       .how-terminal { display: none; }
     }
 
@@ -455,10 +453,8 @@
 
     /* MOBILE: reduce section paddings across the board */
     @media (max-width: 640px) {
-      .how-header,
       .features-header { flex-direction: column; gap: 8px; }
 
-      .how-header,
       .features-header,
       .pricing-header,
       .api-header { padding: 32px 20px 24px; }
@@ -473,8 +469,7 @@
       .feature-name { padding: 20px; }
       .feature-desc { padding: 16px 20px; }
 
-      .how-step-num { padding: 20px 14px; padding-top: 22px; }
-      .how-step-content { padding: 20px; }
+      .how { padding: 48px 20px; }
 
       .hero-sub { font-size: 15px; }
       .hero-left { padding: 40px 20px; }
@@ -531,12 +526,12 @@
 <br>
 <span class="t-comment"># Create a site, get a URL</span><br>
 <span class="t-cmd">POST</span> /sites<br>
-<span class="t-res">&nbsp;&nbsp;→ {"url": "violet-crane-42.itslive.dev"}</span><br>
+<span class="t-res">&nbsp;&nbsp;→ {"url": "violet-crane-42.itslive.fyi"}</span><br>
 <br>
 <span class="t-comment"># Publish (HTML, CSS, JS, images — all of it)</span><br>
 <span class="t-cmd">PUT&nbsp;</span> /sites/violet-crane-42  <span class="t-res">@mysite.zip</span><br>
 <br>
-<span class="t-ok">✓ Live at violet-crane-42.itslive.dev</span>
+<span class="t-ok">✓ Live at violet-crane-42.itslive.fyi</span>
       </div>
     </div>
   </div>
@@ -627,51 +622,50 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
 
 <!-- HOW IT WORKS -->
 <section class="how" id="how">
-  <div class="how-header">
-    <div class="section-label">How it works</div>
-    <h2>From idea to live URL in under a minute.</h2>
-  </div>
-  <div class="how-body">
-    <div class="how-steps">
-      <div class="how-step">
-        <div class="how-step-num">01</div>
-        <div class="how-step-content">
-          <h3>You do one thing</h3>
-          <p>Check your email, copy the six-digit code, paste it to your AI. That's it. You're done.</p>
+  <div class="how-inner">
+    <div>
+      <div class="how-label">03 / How it works</div>
+      <h2>From idea to live URL<br>in under a minute.</h2>
+      <div class="how-steps">
+        <div class="how-step">
+          <span class="how-step-num">01</span>
+          <div class="how-step-content">
+            <h3>You do one thing</h3>
+            <p>Check your email, copy the six-digit code, paste it to your AI. That's it. You're done.</p>
+          </div>
         </div>
-      </div>
-      <div class="how-step">
-        <div class="how-step-num">02</div>
-        <div class="how-step-content">
-          <h3>Your AI gets access</h3>
-          <p>A key arrives in the response body — no dashboard to open, no settings page, no redirect to click through.</p>
+        <div class="how-step">
+          <span class="how-step-num">02</span>
+          <div class="how-step-content">
+            <h3>Your AI gets access</h3>
+            <p>A key arrives in the response body — no dashboard to open, no settings page, no redirect.</p>
+          </div>
         </div>
-      </div>
-      <div class="how-step">
-        <div class="how-step-num">03</div>
-        <div class="how-step-content">
-          <h3>A URL is ready instantly</h3>
-          <p>A globally-unique address is auto-generated. Custom names available on paid plans.</p>
+        <div class="how-step">
+          <span class="how-step-num">03</span>
+          <div class="how-step-content">
+            <h3>A URL is ready instantly</h3>
+            <p>A globally-unique address is auto-generated. Custom names available on paid plans.</p>
+          </div>
         </div>
-      </div>
-      <div class="how-step">
-        <div class="how-step-num">04</div>
-        <div class="how-step-content">
-          <h3>Your site goes live</h3>
-          <p>Upload HTML, CSS, JS, and images. The whole site is on the internet within a second. No build step.</p>
+        <div class="how-step">
+          <span class="how-step-num">04</span>
+          <div class="how-step-content">
+            <h3>Your site goes live</h3>
+            <p>Upload HTML, CSS, JS, and images. The whole site is online within a second. No build step.</p>
+          </div>
         </div>
       </div>
     </div>
     <div class="how-terminal">
-      <div class="how-terminal-inner">
-        <div class="terminal-titlebar">
-          <div class="terminal-dots">
-            <div class="terminal-dot"></div><div class="terminal-dot"></div><div class="terminal-dot"></div>
-          </div>
-          <span>agent shell</span>
-          <span style="opacity:0">&nbsp;</span>
+      <div class="terminal-titlebar">
+        <div class="terminal-dots">
+          <div class="terminal-dot"></div><div class="terminal-dot"></div><div class="terminal-dot"></div>
         </div>
-        <div class="terminal-body" style="font-size:12px;line-height:1.85;padding:20px">
+        <span>agent shell</span>
+        <span style="opacity:0">&nbsp;</span>
+      </div>
+      <div class="terminal-body">
 <span class="t-comment"># 1. Request a code</span><br>
 <span class="t-cmd">curl</span> -X POST <span data-api-path="/signup"></span> \<br>
 &nbsp;&nbsp;-d '{"email":"you@example.com"}'<br>
@@ -685,14 +679,13 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
 <span class="t-comment"># 2. Create a site</span><br>
 <span class="t-cmd">curl</span> -X POST <span data-api-path="/sites"></span> \<br>
 &nbsp;&nbsp;-H "X-API-Key: il_live_..."<br>
-<span class="t-res">→ {"url": "https://violet-crane-42.itslive.dev"}</span><br>
+<span class="t-res">→ {"url": "https://violet-crane-42.itslive.fyi"}</span><br>
 <br>
 <span class="t-comment"># 3. Publish your site</span><br>
 <span class="t-cmd">curl</span> -X PUT <span data-api-path="/sites/violet-crane-42"></span> \<br>
 &nbsp;&nbsp;-H "X-API-Key: il_live_..." \<br>
 &nbsp;&nbsp;--data-binary @mysite.zip<br>
-<span class="t-ok">✓ Live at https://violet-crane-42.itslive.dev</span>
-        </div>
+<span class="t-ok">✓ Live at https://violet-crane-42.itslive.fyi</span>
       </div>
     </div>
   </div>
@@ -800,7 +793,7 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
         <li class="dim">Custom domains</li>
         <li class="dim">Site analytics</li>
       </ul>
-      <a class="plan-cta filled" href="#">Get started</a>
+      <a class="plan-cta filled" href="#getting-started">Get started</a>
     </div>
     <div class="pricing-plan">
       <div class="plan-name">Builder</div>
