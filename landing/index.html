@@ -380,46 +380,46 @@
     /* FEATURES */
     .features { border-bottom: 2px solid var(--border); }
     .features-header {
-      padding: 48px 48px 32px; border-bottom: 2px solid var(--border);
+      padding: 48px 48px 32px; border-bottom: 1px solid rgba(17,16,8,.18);
       display: flex; align-items: baseline; gap: 24px;
     }
     .features-header h2 {
       font-size: clamp(26px, 3vw, 40px); font-weight: 700;
       letter-spacing: -0.03em; text-transform: uppercase;
     }
-    .feature-row {
-      display: grid; grid-template-columns: 280px 1fr;
-      border-bottom: 2px solid var(--border);
-      transition: background 0.1s;
+    .features-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
     }
-    .feature-row:last-child { border-bottom: none; }
-    .feature-row:hover { background: var(--surface); }
-    .feature-name {
-      padding: 32px 48px; border-right: 2px solid var(--border);
-      display: flex; flex-direction: column; justify-content: flex-start; gap: 10px;
+    .feature-card {
+      padding: 40px 48px;
+      border-right: 1px solid rgba(17,16,8,.14);
+      border-bottom: 1px solid rgba(17,16,8,.14);
+      transition: background 0.12s;
     }
-    .feature-name h3 {
-      font-size: 15px; font-weight: 700;
-      letter-spacing: -0.01em; text-transform: uppercase;
-    }
+    .feature-card:hover { background: var(--surface); }
+    .feature-card:nth-child(even) { border-right: none; }
+    .feature-card:last-child { grid-column: span 2; border-right: none; border-bottom: none; }
     .feature-tag {
       display: inline-block; font-size: 9px; font-weight: 700;
       letter-spacing: 0.1em; text-transform: uppercase;
       color: var(--bg); background: var(--accent); padding: 3px 7px;
-      align-self: flex-start;
+      margin-bottom: 16px;
     }
-    .feature-desc { padding: 32px 48px; }
-    .feature-desc p {
-      font-size: 15px; line-height: 1.65; color: var(--muted); max-width: 580px;
+    .feature-card h3 {
+      font-size: 21px; font-weight: 700; letter-spacing: -0.02em;
+      color: var(--text); margin-bottom: 10px; line-height: 1.2;
+    }
+    .feature-card p {
+      font-size: 15px; line-height: 1.65; color: #3d3930;
     }
     .feature-detail {
-      margin-top: 12px; font-size: 12px; color: var(--muted);
-      font-family: var(--mono); border-left: 3px solid var(--accent); padding-left: 12px;
+      margin-top: 14px; font-size: 11.5px; color: var(--muted);
+      font-family: var(--mono); border-left: 2px solid var(--accent); padding-left: 10px;
     }
     @media (max-width: 768px) {
-      .feature-row { grid-template-columns: 1fr; }
-      .feature-name { border-right: none; border-bottom: 1px solid var(--surface); padding: 24px; }
-      .feature-desc { padding: 20px 24px; }
+      .features-grid { grid-template-columns: 1fr; }
+      .feature-card { border-right: none; padding: 28px 24px; }
+      .feature-card:last-child { grid-column: span 1; }
     }
 
     /* PRICING */
@@ -538,9 +538,6 @@
 
       .pricing-plan { padding: 32px 20px; }
 
-      .feature-name { padding: 20px; }
-      .feature-desc { padding: 16px 20px; }
-
       .how { padding: 48px 20px; }
 
       .hero-sub { font-size: 15px; }
@@ -574,7 +571,7 @@
     <p class="hero-sub">Your AI built something. Getting it online shouldn't mean signing up for three platforms, clicking through OAuth flows, and reading a deployment guide. ItsLive goes live before the YouTube ad ends.</p>
     <div class="hero-ctas">
       <a class="btn-primary" href="#getting-started">Get started free</a>
-      <a class="btn-outline" href="#api">API reference</a>
+      <a class="btn-outline" data-api-path="/llms.txt" target="_blank">API reference</a>
     </div>
   </div>
   <div class="hero-right">
@@ -793,74 +790,41 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
     <div class="section-label">Features</div>
     <h2>Built for AI agents. Works for everyone.</h2>
   </div>
-
-  <div class="feature-row">
-    <div class="feature-name">
-      <h3>Goes live instantly</h3>
+  <div class="features-grid">
+    <div class="feature-card">
       <span class="feature-tag">Speed</span>
-    </div>
-    <div class="feature-desc">
+      <h3>Goes live instantly</h3>
       <p>Upload your files and the site is on the internet before you blink. No build pipeline, no deployment queue, no waiting.</p>
       <div class="feature-detail">ItsLive &lt;1s &nbsp;·&nbsp; Netlify ~20s &nbsp;·&nbsp; GitHub Pages 2–5min</div>
     </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-name">
-      <h3>No OAuth. Ever.</h3>
+    <div class="feature-card">
       <span class="feature-tag">Auth</span>
-    </div>
-    <div class="feature-desc">
+      <h3>No OAuth. Ever.</h3>
       <p>API key arrives in the response body. Your AI starts deploying immediately — no redirect flows, no dashboards to click through, no browser required.</p>
     </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-name">
-      <h3>Full sites, not just pages</h3>
+    <div class="feature-card">
       <span class="feature-tag">Deploy</span>
-    </div>
-    <div class="feature-desc">
+      <h3>Full sites, not just pages</h3>
       <p>Upload a ZIP of HTML, CSS, JS, and images. Single-page apps work out of the box. It's not a pastebin for HTML files.</p>
     </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-name">
-      <h3>Fast everywhere</h3>
+    <div class="feature-card">
       <span class="feature-tag">Global</span>
-    </div>
-    <div class="feature-desc">
+      <h3>Fast everywhere</h3>
       <p>Served from 200+ locations worldwide. Tokyo loads as fast as New York. No CDN configuration required.</p>
     </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-name">
-      <h3>Safe to update</h3>
+    <div class="feature-card">
       <span class="feature-tag">Reliability</span>
-    </div>
-    <div class="feature-desc">
+      <h3>Safe to update</h3>
       <p>New version uploads fully before the old one comes down. Visitors never see a half-deployed site.</p>
     </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-name">
-      <h3>Password protected</h3>
+    <div class="feature-card">
       <span class="feature-tag">Access</span>
-    </div>
-    <div class="feature-desc">
+      <h3>Password protected</h3>
       <p>Lock any site behind a password with one API call. Visitors see a clean login page — no extra setup required.</p>
     </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-name">
-      <h3>Built for machines to read</h3>
+    <div class="feature-card">
       <span class="feature-tag">DX</span>
-    </div>
-    <div class="feature-desc">
+      <h3>Built for machines to read</h3>
       <p>Every error has a <code style="font-family:var(--mono);font-size:12px;background:var(--surface);padding:1px 5px">code</code> field your AI can parse. Usage stats queryable via API. No screen-scraping, no ambiguity.</p>
     </div>
   </div>
