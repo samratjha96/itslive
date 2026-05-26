@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ItsLive — Website Hosting for the AI Age</title>
+  <meta name="description" content="Your AI builds it. ItsLive publishes it. No dashboards, no OAuth flows, no build pipelines.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #f2ede4;
+      --surface: #ebe5db;
+      --text:    #111008;
+      --muted:   #8a8274;
+      --accent:  #ff3d00;
+      --accent2: #ff6b35;
+      --border:  #111008;
+      --font:    'Space Grotesk', -apple-system, sans-serif;
+      --mono:    'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── UTILITIES ─────────────────────────────────── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ── NAV ────────────────────────────────────────── */
+    nav {
+      border-top: 2px solid var(--border);
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      height: 60px;
+    }
+
+    .nav-logo {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 36px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      transition: color 0.12s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-cta {
+      display: inline-block;
+      background: var(--text);
+      color: var(--bg);
+      padding: 10px 22px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--font);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: 2px solid var(--border);
+      border-radius: 0;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    @media (max-width: 768px) {
+      nav { padding: 0 20px; }
+      .nav-links { display: none; }
+    }
+
+    /* ── HERO ────────────────────────────────────────── */
+    .hero {
+      padding: 72px 48px 80px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .hero-headline {
+      font-size: clamp(52px, 8.5vw, 140px);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      text-transform: uppercase;
+      margin-bottom: 52px;
+    }
+
+    .hero-headline .accent {
+      color: var(--accent);
+    }
+
+    .hero-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+
+    .hero-left p {
+      font-size: 18px;
+      line-height: 1.55;
+      color: var(--text);
+      max-width: 440px;
+      margin-bottom: 36px;
+    }
+
+    .hero-ctas {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      display: inline-block;
+      background: var(--text);
+      color: var(--bg);
+      padding: 14px 28px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: var(--font);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 2px solid var(--border);
+      border-radius: 0;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .btn-outline {
+      display: inline-block;
+      background: transparent;
+      color: var(--text);
+      padding: 14px 28px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: var(--font);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 2px solid var(--border);
+      border-radius: 0;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .btn-outline:hover {
+      background: var(--surface);
+    }
+
+    .hero-terminal {
+      border: 2px solid var(--border);
+      background: var(--surface);
+    }
+
+    .terminal-titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 2px solid var(--border);
+      background: var(--text);
+    }
+
+    .terminal-titlebar span {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--bg);
+      letter-spacing: 0.04em;
+    }
+
+    .terminal-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .terminal-dot {
+      width: 10px;
+      height: 10px;
+      border: 1px solid rgba(242, 237, 228, 0.3);
+    }
+
+    .terminal-body {
+      padding: 24px 20px;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .t-muted { color: var(--muted); }
+    .t-accent { color: var(--accent); font-weight: 500; }
+    .t-prompt::before { content: '$ '; color: var(--accent); }
+
+    /* ── STATS BAR ───────────────────────────────────── */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      border-bottom: 2px solid var(--border);
+    }
+
+    .stat-item {
+      padding: 32px 40px;
+      border-right: 2px solid var(--border);
+    }
+
+    .stat-item:last-child { border-right: none; }
+
+    .stat-number {
+      font-size: clamp(28px, 3.5vw, 52px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .stat-number .accent { color: var(--accent); }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    @media (max-width: 900px) {
+      .stats-bar { grid-template-columns: repeat(3, 1fr); }
+      .stat-item:nth-child(3) { border-right: none; }
+    }
+
+    /* ── HOW IT STARTS ───────────────────────────────── */
+    .how {
+      padding: 80px 48px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .how-header {
+      margin-bottom: 52px;
+    }
+
+    .how-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: start;
+    }
+
+    .how-left-heading {
+      font-size: clamp(36px, 4.5vw, 68px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.0;
+      text-transform: uppercase;
+    }
+
+    .how-subtext {
+      margin-top: 20px;
+      font-size: 15px;
+      color: var(--muted);
+      max-width: 380px;
+    }
+
+    .prompt-box {
+      border: 2px solid var(--border);
+      background: var(--surface);
+    }
+
+    .prompt-box-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 2px solid var(--border);
+      background: var(--text);
+    }
+
+    .prompt-box-header span {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--bg);
+    }
+
+    .prompt-box-body {
+      padding: 24px 22px;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.8;
+      color: var(--text);
+    }
+
+    .prompt-box-body .comment {
+      color: var(--muted);
+    }
+
+    .prompt-box-body .keyword {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .prompt-step {
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--mono);
+    }
+
+    .step-text {
+      font-size: 14px;
+      line-height: 1.5;
+      padding-top: 2px;
+    }
+
+    /* ── FEATURES ────────────────────────────────────── */
+    .features {
+      border-bottom: 2px solid var(--border);
+    }
+
+    .features-header {
+      padding: 48px 48px 32px;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 24px;
+    }
+
+    .features-header h2 {
+      font-size: clamp(28px, 3vw, 42px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      text-transform: uppercase;
+    }
+
+    .feature-row {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      border-bottom: 2px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    .feature-row:last-child { border-bottom: none; }
+
+    .feature-row:hover { background: var(--surface); }
+
+    .feature-name {
+      padding: 36px 48px;
+      border-right: 2px solid var(--border);
+    }
+
+    .feature-name h3 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .feature-name .feature-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--bg);
+      background: var(--accent);
+      padding: 3px 8px;
+    }
+
+    .feature-desc {
+      padding: 36px 48px;
+    }
+
+    .feature-desc p {
+      font-size: 16px;
+      line-height: 1.6;
+      max-width: 600px;
+      margin-bottom: 16px;
+    }
+
+    .feature-desc p:last-child { margin-bottom: 0; }
+
+    .feature-detail {
+      font-size: 13px;
+      color: var(--muted);
+      font-family: var(--mono);
+      border-left: 3px solid var(--accent);
+      padding-left: 14px;
+    }
+
+    /* ── PRICING ─────────────────────────────────────── */
+    .pricing {
+      border-bottom: 2px solid var(--border);
+    }
+
+    .pricing-header {
+      padding: 48px 48px 32px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .pricing-header h2 {
+      font-size: clamp(28px, 3vw, 42px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .pricing-plan {
+      padding: 48px;
+      border-right: 2px solid var(--border);
+    }
+
+    .pricing-plan:last-child { border-right: none; }
+
+    .plan-name {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .plan-price {
+      font-size: clamp(36px, 4vw, 60px);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .plan-price sup {
+      font-size: 0.4em;
+      font-weight: 500;
+      vertical-align: super;
+      letter-spacing: 0;
+    }
+
+    .plan-price .per {
+      font-size: 0.28em;
+      font-weight: 400;
+      letter-spacing: 0;
+      color: var(--muted);
+    }
+
+    .plan-tagline {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 36px;
+      padding-bottom: 36px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .plan-features {
+      list-style: none;
+    }
+
+    .plan-features li {
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--surface);
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .plan-features li::before {
+      content: '—';
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .plan-cta {
+      margin-top: 36px;
+      display: block;
+      text-align: center;
+      border: 2px solid var(--border);
+      padding: 14px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--font);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .plan-cta:hover {
+      background: var(--text);
+      color: var(--bg);
+    }
+
+    .plan-cta.filled {
+      background: var(--text);
+      color: var(--bg);
+    }
+
+    .plan-cta.filled:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* ── FOOTER ──────────────────────────────────────── */
+    footer {
+      border-top: 2px solid var(--border);
+      padding: 28px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-left {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .footer-left strong {
+      color: var(--text);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      transition: color 0.12s;
+    }
+
+    .footer-links a:hover { color: var(--text); }
+
+    @media (max-width: 900px) {
+      .hero-body { grid-template-columns: 1fr; }
+      .how-body { grid-template-columns: 1fr; }
+      .pricing-grid { grid-template-columns: 1fr; }
+      .pricing-plan { border-right: none; border-bottom: 2px solid var(--border); }
+      .pricing-plan:last-child { border-bottom: none; }
+      .feature-row { grid-template-columns: 1fr; }
+      .feature-name { border-right: none; border-bottom: 2px solid var(--border); }
+      .hero { padding: 48px 20px 56px; }
+      .how { padding: 56px 20px; }
+      .features-header { padding: 32px 20px 24px; }
+      .feature-name, .feature-desc { padding: 24px 20px; }
+      .pricing-header { padding: 32px 20px 24px; }
+      .pricing-plan { padding: 32px 20px; }
+      footer { padding: 24px 20px; flex-direction: column; gap: 16px; text-align: center; }
+      .footer-links { flex-wrap: wrap; justify-content: center; }
+      .stat-item { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── NAV ────────────────────────────────────────── -->
+  <nav>
+    <a href="/" class="nav-logo">ITSLIVE</a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#docs">Docs</a></li>
+      <li><a href="#blog">Blog</a></li>
+    </ul>
+    <a href="#" class="nav-cta">Get Access</a>
+  </nav>
+
+  <!-- ── HERO ────────────────────────────────────────── -->
+  <section class="hero">
+    <h1 class="hero-headline">
+      WEBSITE HOSTING<br>FOR THE <span class="accent">AI AGE</span>
+    </h1>
+
+    <div class="hero-body">
+      <div class="hero-left">
+        <p>Your AI builds it. ItsLive publishes it. No dashboards, no OAuth flows, no build pipelines. One tool call and your site is live — on a real URL, in under two seconds.</p>
+        <div class="hero-ctas">
+          <a href="#" class="btn-primary">Start Building Free</a>
+          <a href="#features" class="btn-outline">See How It Works</a>
+        </div>
+      </div>
+
+      <div class="hero-terminal">
+        <div class="terminal-titlebar">
+          <span>AGENT CONSOLE</span>
+          <div class="terminal-dots">
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+          </div>
+        </div>
+        <div class="terminal-body">
+          <div class="t-muted"># Tool: itslive_publish</div>
+          <br>
+          <div class="t-prompt">itslive publish ./site</div>
+          <br>
+          <div class="t-muted">Uploading assets...   <span style="color: var(--accent);">████████</span> done</div>
+          <div class="t-muted">Deploying to edge...  <span style="color: var(--accent);">████████</span> done</div>
+          <div class="t-muted">Assigning domain...   <span style="color: var(--accent);">████████</span> done</div>
+          <br>
+          <div><span class="t-muted">Live at </span><span class="t-accent">https://panda-scout-42.itslive.app</span></div>
+          <div class="t-muted">Deploy time: <span style="color: var(--text); font-weight: 500;">1.4s</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── STATS BAR ─────────────────────────────────── -->
+  <div class="stats-bar">
+    <div class="stat-item">
+      <div class="stat-number"><span class="accent">1.4</span>s</div>
+      <div class="stat-label">Avg Deploy Time</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">300<span class="accent">+</span></div>
+      <div class="stat-label">Edge Locations</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number"><span class="accent">0</span></div>
+      <div class="stat-label">Config Files</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">99.9<span class="accent">%</span></div>
+      <div class="stat-label">Uptime SLA</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number"><span class="accent">1</span></div>
+      <div class="stat-label">Tool Call to Deploy</div>
+    </div>
+  </div>
+
+  <!-- ── HOW IT STARTS ─────────────────────────────── -->
+  <section class="how" id="docs">
+    <div class="how-header">
+      <div class="section-label">How It Starts</div>
+    </div>
+    <div class="how-body">
+      <div>
+        <h2 class="how-left-heading">Paste this<br>into<br>your AI.</h2>
+        <p class="how-subtext">Copy the system prompt below and drop it into any AI agent — Claude, GPT-4o, Gemini. Your agent gains the ability to publish websites in real time.</p>
+        <div class="prompt-step">
+          <div class="step-num">1</div>
+          <div class="step-text">Add the ItsLive tool definition to your agent's system prompt or tool registry.</div>
+        </div>
+        <div class="prompt-step">
+          <div class="step-num">2</div>
+          <div class="step-text">Ask your agent to build and publish anything — a landing page, dashboard, report, portfolio.</div>
+        </div>
+        <div class="prompt-step">
+          <div class="step-num">3</div>
+          <div class="step-text">Your site appears at a shareable URL. Instant. No human required.</div>
+        </div>
+      </div>
+
+      <div class="prompt-box">
+        <div class="prompt-box-header">
+          <span>System Prompt — Copy &amp; Paste</span>
+          <span style="opacity: 0.5;">itslive_tool.txt</span>
+        </div>
+        <div class="prompt-box-body">
+<span class="comment">## Tool: itslive_publish</span><br>
+<br>
+<span class="keyword">You have access to ItsLive, a web publishing</span><br>
+<span class="keyword">tool that deploys static sites to a live URL.</span><br>
+<br>
+<span class="comment">### When to use</span><br>
+Call <span class="keyword">itslive_publish</span> whenever the user asks<br>
+you to "make it live", "publish", "share a<br>
+link", or "deploy" any HTML/CSS/JS content.<br>
+<br>
+<span class="comment">### Parameters</span><br>
+- <span class="keyword">files</span>: object mapping paths to content<br>
+- <span class="keyword">subdomain</span>: optional custom slug<br>
+- <span class="keyword">ttl</span>: lifetime in seconds (default: forever)<br>
+<br>
+<span class="comment">### Example</span><br>
+<span class="keyword">itslive_publish</span>({<br>
+&nbsp;&nbsp;files: { <span class="keyword">"index.html"</span>: "&lt;!DOCTYPE..." },<br>
+&nbsp;&nbsp;subdomain: <span class="keyword">"my-report"</span><br>
+})
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FEATURES ──────────────────────────────────── -->
+  <section class="features" id="features">
+    <div class="features-header">
+      <div class="section-label">What You Get</div>
+      <h2>Built for Agents</h2>
+    </div>
+
+    <div class="feature-row">
+      <div class="feature-name">
+        <h3>One-Call<br>Deploy</h3>
+        <div class="feature-tag">Core</div>
+      </div>
+      <div class="feature-desc">
+        <p>A single tool call is all it takes. Pass your HTML, CSS, and assets as a JSON object. ItsLive handles bundling, CDN distribution, and URL assignment without any configuration on your part.</p>
+        <p class="feature-detail">itslive_publish({ files: { ... } }) → { url: "https://..." }</p>
+      </div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feature-name">
+        <h3>Live<br>Previews</h3>
+        <div class="feature-tag">Workflow</div>
+      </div>
+      <div class="feature-desc">
+        <p>Every publish generates a unique, shareable URL instantly. Show your work mid-conversation, iterate with feedback, and republish in seconds. Each version gets its own permalink — nothing gets overwritten unless you say so.</p>
+        <p class="feature-detail">Same subdomain? New version. New subdomain? Permanent snapshot.</p>
+      </div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feature-name">
+        <h3>Global<br>Edge CDN</h3>
+        <div class="feature-tag">Infrastructure</div>
+      </div>
+      <div class="feature-desc">
+        <p>Sites are served from 300+ edge nodes worldwide. No origin server, no cold starts, no warming period. Your agent publishes once and it's fast everywhere — Tokyo, Frankfurt, São Paulo, wherever.</p>
+        <p class="feature-detail">P99 TTFB under 60ms globally. No origin pull on cache hit.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PRICING ────────────────────────────────────── -->
+  <section class="pricing" id="pricing">
+    <div class="pricing-header">
+      <div class="section-label">Pricing</div>
+      <h2>Straightforward</h2>
+    </div>
+
+    <div class="pricing-grid">
+      <div class="pricing-plan">
+        <div class="plan-name">Free</div>
+        <div class="plan-price"><sup>$</sup>0</div>
+        <div class="plan-tagline">For experiments and side projects. No card required.</div>
+        <ul class="plan-features">
+          <li>5 active sites</li>
+          <li>500 MB total storage</li>
+          <li>10 GB bandwidth / month</li>
+          <li>*.itslive.app subdomains</li>
+          <li>Deploys expire after 30 days</li>
+          <li>Community support</li>
+        </ul>
+        <a href="#" class="plan-cta">Start Free</a>
+      </div>
+
+      <div class="pricing-plan">
+        <div class="plan-name">Pro</div>
+        <div class="plan-price"><sup>$</sup>19<span class="per">/month</span></div>
+        <div class="plan-tagline">For agents that ship. Per workspace, not per seat.</div>
+        <ul class="plan-features">
+          <li>Unlimited active sites</li>
+          <li>25 GB storage</li>
+          <li>500 GB bandwidth / month</li>
+          <li>Custom domains + TLS</li>
+          <li>Sites never expire</li>
+          <li>Analytics dashboard</li>
+          <li>Email support</li>
+        </ul>
+        <a href="#" class="plan-cta filled" style="opacity:0.5;cursor:default;pointer-events:none">Free during beta</a>
+      </div>
+
+      <div class="pricing-plan">
+        <div class="plan-name">Team</div>
+        <div class="plan-price"><sup>$</sup>79<span class="per">/month</span></div>
+        <div class="plan-tagline">For teams running agents at scale across products.</div>
+        <ul class="plan-features">
+          <li>Everything in Pro</li>
+          <li>Unlimited storage</li>
+          <li>2 TB bandwidth / month</li>
+          <li>Up to 10 workspaces</li>
+          <li>Password-protected sites</li>
+          <li>Audit logs</li>
+          <li>Priority support + SLA</li>
+        </ul>
+        <a href="#" class="plan-cta" style="opacity:0.5;cursor:default;pointer-events:none">Free during beta</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FOOTER ─────────────────────────────────────── -->
+  <footer>
+    <div class="footer-left">
+      &copy; 2026 <strong>ITSLIVE</strong> — Built for the AI Age
+    </div>
+    <ul class="footer-links">
+      <li><a href="#">Docs</a></li>
+      <li><a href="#">Status</a></li>
+      <li><a href="#">Privacy</a></li>
+      <li><a href="#">Terms</a></li>
+      <li><a href="#">Contact</a></li>
+    </ul>
+  </footer>
+
+</body>
+</html>

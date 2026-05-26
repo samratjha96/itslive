@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ItsLive — Website hosting for the AI age</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #05070f;
+      --surface: #0d1120;
+      --card: #111827;
+      --border: #1f2937;
+      --border2: #374151;
+      --text: #f9fafb;
+      --muted: #6b7280;
+      --muted2: #9ca3af;
+      --accent: #22d3ee;
+      --accent2: #67e8f9;
+      --green: #10b981;
+      --font: 'DM Sans', sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font);
+      background-color: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 48px;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    /* ─── NAV ─────────────────────────────────────────────────────────── */
+
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(5, 7, 15, 0.8);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .logo-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+      display: inline-block;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--muted2);
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+    }
+
+    .nav-cta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      border-radius: 7px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted2);
+      border: 1px solid transparent;
+    }
+
+    .btn-ghost:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+      border-color: var(--border);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #05070f;
+      border: 1px solid transparent;
+      font-weight: 700;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent2);
+      box-shadow: 0 0 20px rgba(34,211,238,0.3);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border2);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ─── HERO ────────────────────────────────────────────────────────── */
+
+    .hero {
+      padding: 140px 0 100px;
+      position: relative;
+      overflow: hidden;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 10% 50%, rgba(34,211,238,0.04) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+      position: relative;
+    }
+
+    .hero-left {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .beta-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(34, 211, 238, 0.07);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+      width: fit-content;
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .pulse-dot::after {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: 0.3;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.3; }
+      50% { transform: scale(1.8); opacity: 0; }
+    }
+
+    .hero-h1 {
+      font-size: clamp(38px, 4.5vw, 58px);
+      font-weight: 800;
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+      color: var(--text);
+    }
+
+    .hero-h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .hero-sub {
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--muted2);
+      line-height: 1.65;
+      max-width: 460px;
+    }
+
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .hero-actions .btn {
+      padding: 12px 24px;
+      font-size: 15px;
+    }
+
+    .hero-note {
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hero-note svg {
+      flex-shrink: 0;
+    }
+
+    /* ─── TERMINAL ────────────────────────────────────────────────────── */
+
+    .terminal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 0 1px var(--border), 0 24px 64px rgba(0,0,0,0.6), 0 0 80px rgba(34,211,238,0.04);
+    }
+
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .t-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .t-dot-red { background: #ff5f56; }
+    .t-dot-yellow { background: #febc2e; }
+    .t-dot-green { background: #28c840; }
+
+    .terminal-label {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .terminal-body {
+      padding: 24px;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .t-line {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .t-prompt {
+      color: var(--accent);
+      flex-shrink: 0;
+      font-size: 13px;
+    }
+
+    .t-cmd { color: var(--text); }
+    .t-comment { color: var(--muted); }
+    .t-green { color: var(--green); }
+    .t-cyan { color: var(--accent); }
+    .t-dim { color: var(--muted2); }
+    .t-white { color: var(--text); }
+    .t-yellow { color: #fbbf24; }
+
+    .t-gap { height: 10px; }
+
+    .t-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 14px;
+      background: var(--accent);
+      vertical-align: middle;
+      animation: blink 1.2s step-end infinite;
+      margin-left: 2px;
+      opacity: 0.9;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 0.9; }
+      50% { opacity: 0; }
+    }
+
+    /* ─── SEPARATOR ───────────────────────────────────────────────────── */
+
+    .separator {
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, var(--accent) 30%, var(--accent2) 70%, transparent 100%);
+      opacity: 0.3;
+    }
+
+    /* ─── STATS BAR ───────────────────────────────────────────────────── */
+
+    .stats-bar {
+      padding: 52px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .stats-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 40px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-number {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: var(--text);
+      text-shadow: 0 0 20px rgba(34,211,238,.3);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .stat-divider {
+      width: 1px;
+      height: 40px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* ─── GETTING STARTED ─────────────────────────────────────────────── */
+
+    .getting-started {
+      padding: 96px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .gs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .gs-left {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .section-eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .section-h2 {
+      font-size: clamp(26px, 3vw, 36px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      color: var(--text);
+    }
+
+    .section-body {
+      font-size: 16px;
+      color: var(--muted2);
+      line-height: 1.75;
+    }
+
+    .steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 8px;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: rgba(34, 211, 238, 0.1);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-family: var(--mono);
+      margin-top: 2px;
+    }
+
+    .step-text {
+      font-size: 14px;
+      color: var(--muted2);
+      line-height: 1.6;
+    }
+
+    .step-text strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* ─── PROMPT BOX ──────────────────────────────────────────────────── */
+
+    .prompt-box-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .prompt-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .prompt-box {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 0 1px var(--border), 0 4px 16px rgba(0,0,0,0.4);
+    }
+
+    .prompt-box-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .prompt-box-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      font-family: var(--mono);
+      letter-spacing: 0.04em;
+    }
+
+    .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: rgba(34, 211, 238, 0.08);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      border-radius: 5px;
+      color: var(--accent);
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(34, 211, 238, 0.14);
+      border-color: rgba(34, 211, 238, 0.4);
+    }
+
+    .copy-btn.copied {
+      color: var(--green);
+      background: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.25);
+    }
+
+    .prompt-text {
+      padding: 20px 20px 24px;
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .prompt-highlight {
+      color: var(--accent);
+    }
+
+    .prompt-placeholder {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .prompt-note {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      padding: 14px 20px;
+      background: rgba(255,255,255,0.01);
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+    }
+
+    .prompt-note span {
+      color: var(--green);
+    }
+
+    /* ─── FEATURES ────────────────────────────────────────────────────── */
+
+    .features {
+      padding: 96px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .features-header {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 56px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .feature-card {
+      background: var(--card);
+      padding: 36px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: background 0.2s;
+    }
+
+    .feature-card:hover {
+      background: #141d2e;
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      background: rgba(34, 211, 238, 0.08);
+      border: 1px solid rgba(34, 211, 238, 0.15);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .feature-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--muted2);
+      line-height: 1.7;
+    }
+
+    /* ─── PRICING ─────────────────────────────────────────────────────── */
+
+    .pricing {
+      padding: 96px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .pricing-header {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 56px;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .pricing-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 36px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      box-shadow: 0 0 0 1px var(--border), 0 4px 16px rgba(0,0,0,0.4);
+      transition: border-color 0.2s;
+    }
+
+    .pricing-card:hover {
+      border-color: var(--border2);
+    }
+
+    .pricing-card.featured {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(34,211,238,0.3), 0 4px 40px rgba(34,211,238,0.08), 0 4px 16px rgba(0,0,0,0.4);
+      background: #0d1a24;
+    }
+
+    .pricing-card.featured:hover {
+      border-color: var(--accent2);
+    }
+
+    .plan-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      background: rgba(34, 211, 238, 0.1);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      width: fit-content;
+    }
+
+    .plan-name {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+
+    .plan-price {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+
+    .plan-price-amount {
+      font-size: 40px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .featured .plan-price-amount {
+      text-shadow: 0 0 20px rgba(34,211,238,.3);
+    }
+
+    .plan-price-period {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .plan-desc {
+      font-size: 14px;
+      color: var(--muted2);
+      line-height: 1.65;
+    }
+
+    .plan-divider {
+      height: 1px;
+      background: var(--border);
+    }
+
+    .plan-features {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      list-style: none;
+    }
+
+    .plan-feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--muted2);
+      line-height: 1.5;
+    }
+
+    .plan-check {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .check-active { color: var(--green); }
+    .check-inactive { color: var(--muted); opacity: 0.4; }
+
+    .plan-cta {
+      display: block;
+      text-align: center;
+      padding: 13px;
+      border-radius: 8px;
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      width: 100%;
+    }
+
+    .plan-cta-outline {
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--text);
+    }
+
+    .plan-cta-outline:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .plan-cta-filled {
+      background: var(--accent);
+      color: #05070f;
+    }
+
+    .plan-cta-filled:hover {
+      background: var(--accent2);
+      box-shadow: 0 0 20px rgba(34,211,238,0.3);
+    }
+
+    /* ─── FOOTER ──────────────────────────────────────────────────────── */
+
+    footer {
+      padding: 56px 0 40px;
+    }
+
+    .footer-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+    }
+
+    .footer-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 48px;
+    }
+
+    .footer-brand {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 280px;
+    }
+
+    .footer-tagline {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .footer-links-group {
+      display: flex;
+      gap: 64px;
+    }
+
+    .footer-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .footer-col-label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .footer-col a {
+      font-size: 14px;
+      color: var(--muted2);
+      transition: color 0.2s;
+    }
+
+    .footer-col a:hover {
+      color: var(--text);
+    }
+
+    .footer-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 28px;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer-copy {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .footer-legal {
+      display: flex;
+      gap: 24px;
+    }
+
+    .footer-legal a {
+      font-size: 13px;
+      color: var(--muted);
+      transition: color 0.2s;
+    }
+
+    .footer-legal a:hover {
+      color: var(--muted2);
+    }
+
+    /* ─── MOBILE ──────────────────────────────────────────────────────── */
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 0 20px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .nav-cta .btn-ghost {
+        display: none;
+      }
+
+      .hero {
+        padding: 100px 0 64px;
+      }
+
+      .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+
+      .hero-h1 {
+        font-size: 36px;
+      }
+
+      .hero-sub {
+        font-size: 16px;
+      }
+
+      .stats-inner {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 32px;
+      }
+
+      .stat-divider {
+        display: none;
+      }
+
+      .gs-grid {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .footer-top {
+        flex-direction: column;
+      }
+
+      .footer-links-group {
+        gap: 40px;
+      }
+
+      .footer-bottom {
+        flex-direction: column;
+        gap: 16px;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="container">
+      <div class="nav-inner">
+        <a href="/" class="nav-logo">
+          <span class="logo-dot"></span>
+          ItsLive
+        </a>
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="https://docs.itslive.dev">Docs</a></li>
+          <li><a href="https://blog.itslive.dev">Blog</a></li>
+        </ul>
+        <div class="nav-cta">
+          <a href="/login" class="btn btn-ghost">Sign in</a>
+          <a href="/signup" class="btn btn-primary">Get started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-grid">
+
+        <div class="hero-left">
+          <div class="beta-badge">
+            <span class="pulse-dot"></span>
+            Now in public beta
+          </div>
+
+          <h1 class="hero-h1">Website hosting<br>for the <em>AI age.</em></h1>
+
+          <p class="hero-sub">
+            Give your AI agent a URL. No dashboards, no config files, no SSH keys.
+            Just tell the agent to deploy — it handles the rest.
+          </p>
+
+          <div class="hero-actions">
+            <a href="/signup" class="btn btn-primary">
+              Start for free
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a href="https://docs.itslive.dev" class="btn btn-outline">Read the docs</a>
+          </div>
+
+          <div class="hero-note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Deploys in under 3 seconds. No credit card required.
+          </div>
+        </div>
+
+        <div class="hero-right">
+          <div class="terminal">
+            <div class="terminal-bar">
+              <span class="t-dot t-dot-red"></span>
+              <span class="t-dot t-dot-yellow"></span>
+              <span class="t-dot t-dot-green"></span>
+              <span class="terminal-label">agent session</span>
+            </div>
+            <div class="terminal-body">
+              <div class="t-line">
+                <span class="t-prompt">$</span>
+                <span class="t-cmd">claude "Deploy my portfolio site"</span>
+              </div>
+              <div class="t-gap"></div>
+              <div class="t-line">
+                <span class="t-comment t-dim">&gt; Reading itslive API docs...</span>
+              </div>
+              <div class="t-line">
+                <span class="t-comment t-dim">&gt; Generating site from context...</span>
+              </div>
+              <div class="t-line">
+                <span class="t-comment t-dim">&gt; Uploading 12 files...</span>
+              </div>
+              <div class="t-gap"></div>
+              <div class="t-line">
+                <span class="t-green">&#10003; Deployed in 2.4s</span>
+              </div>
+              <div class="t-gap"></div>
+              <div class="t-line">
+                <span class="t-dim">URL</span>
+                <span class="t-cyan">https://samrat.itslive.dev</span>
+              </div>
+              <div class="t-line">
+                <span class="t-dim">CDN</span>
+                <span class="t-white">330 edge nodes active</span>
+              </div>
+              <div class="t-line">
+                <span class="t-dim">TLS</span>
+                <span class="t-green">auto-provisioned</span>
+              </div>
+              <div class="t-gap"></div>
+              <div class="t-line">
+                <span class="t-prompt">$</span>
+                <span class="t-cursor"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <div class="separator"></div>
+
+  <!-- STATS BAR -->
+  <section class="stats-bar">
+    <div class="container">
+      <div class="stats-inner">
+        <div class="stat-item">
+          <div class="stat-number">330+</div>
+          <div class="stat-label">Edge locations worldwide</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-number">&lt;3s</div>
+          <div class="stat-label">Average deploy time</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-number">99.99%</div>
+          <div class="stat-label">Uptime SLA</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-number">0</div>
+          <div class="stat-label">Config files required</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GETTING STARTED -->
+  <section class="getting-started" id="getting-started">
+    <div class="container">
+      <div class="gs-grid">
+
+        <div class="gs-left">
+          <div class="section-eyebrow">Getting started</div>
+          <h2 class="section-h2">One prompt.<br>A live website.</h2>
+          <p class="section-body">
+            ItsLive is designed to be used by AI agents, not humans.
+            There's no dashboard to navigate, no CLI to install.
+            Your agent reads our machine-readable docs and figures out the rest.
+          </p>
+          <div class="steps-list">
+            <div class="step">
+              <div class="step-num">1</div>
+              <div class="step-text"><strong>Give your agent the prompt below.</strong> It points to our <code style="font-family:var(--mono);font-size:12px;color:var(--accent);">llms.txt</code> — a machine-readable API reference built for AI.</div>
+            </div>
+            <div class="step">
+              <div class="step-num">2</div>
+              <div class="step-text"><strong>The agent reads the docs, builds your site, and deploys.</strong> No authentication dance, no config ceremony.</div>
+            </div>
+            <div class="step">
+              <div class="step-num">3</div>
+              <div class="step-text"><strong>You get a live URL instantly.</strong> Share it, update it, or password-protect it — all via prompts.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="prompt-box-wrapper">
+          <div class="prompt-label">Paste this prompt into any AI agent</div>
+          <div class="prompt-box" id="prompt-box">
+            <div class="prompt-box-header">
+              <span class="prompt-box-title">prompt.txt</span>
+              <button class="copy-btn" id="copy-btn" onclick="copyPrompt()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                Copy
+              </button>
+            </div>
+            <div class="prompt-text"><span class="t-white">Read </span><span class="prompt-highlight">https://api.itslive.dev/llms.txt</span><span class="t-white"> and deploy a site for me. My email: </span><span class="prompt-placeholder">[your email here]</span></div>
+            <div class="prompt-note">
+              <span>llms.txt</span> is a machine-readable spec — your agent knows exactly what to do.
+            </div>
+          </div>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6;">Works with Claude, GPT-4o, Gemini, and any agent that can make HTTP requests. The agent handles auth, deployment, and CDN propagation automatically.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="features-header">
+        <div class="section-eyebrow">Features</div>
+        <h2 class="section-h2">Built for agents,<br>not just developers.</h2>
+      </div>
+
+      <div class="features-grid">
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline></svg>
+          </div>
+          <div class="feature-title">Goes live instantly</div>
+          <div class="feature-desc">Deploys propagate to 330+ edge nodes in under 3 seconds. Your agent doesn't wait — it moves on with the next task while the site goes live.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          </div>
+          <div class="feature-title">Fast everywhere</div>
+          <div class="feature-desc">Content is cached at the edge globally. Sub-50ms response times in North America, Europe, and Asia. Automatic cache invalidation on every deploy.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          </div>
+          <div class="feature-title">No OAuth required</div>
+          <div class="feature-desc">Agents authenticate with a single API key. No multi-step OAuth flows, no browser redirects, no token refresh complexity. Just one header.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+          </div>
+          <div class="feature-title">Full sites, not just pages</div>
+          <div class="feature-desc">Deploy multi-page apps, SPAs, or static sites. Full asset support for HTML, CSS, JS, images, fonts, and binaries. Custom domains included.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-3.51"></path></svg>
+          </div>
+          <div class="feature-title">Safe to update</div>
+          <div class="feature-desc">Every deploy is atomic — the old version stays live until the new one is fully propagated. Instant rollback to any previous version with a single API call.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="9" y2="15"></line><line x1="15" y1="9" x2="15" y2="15"></line></svg>
+          </div>
+          <div class="feature-title">Password protected</div>
+          <div class="feature-desc">Lock any site with a password in one API call. Perfect for client previews, internal tools, or staging environments. No separate auth layer to configure.</div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="pricing" id="pricing">
+    <div class="container">
+      <div class="pricing-header">
+        <div class="section-eyebrow">Pricing</div>
+        <h2 class="section-h2">Simple, predictable pricing.</h2>
+        <p class="section-body" style="max-width:480px;">No per-seat pricing. No egress fees. No surprise bills at the end of the month.</p>
+      </div>
+
+      <div class="pricing-grid">
+
+        <!-- Hobby -->
+        <div class="pricing-card">
+          <div>
+            <div class="plan-name">Hobby</div>
+            <div class="plan-price" style="margin-top:12px;">
+              <div class="plan-price-amount">$0</div>
+              <div class="plan-price-period">/ month</div>
+            </div>
+          </div>
+          <p class="plan-desc">Everything you need to get started. No credit card required.</p>
+          <div class="plan-divider"></div>
+          <ul class="plan-features">
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              3 live sites
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              100 deploys / month
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              1 GB storage
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              .itslive.dev subdomain
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-inactive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <span style="color:var(--muted)">Custom domains</span>
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-inactive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <span style="color:var(--muted)">Password protection</span>
+            </li>
+          </ul>
+          <button class="plan-cta plan-cta-outline">Get started free</button>
+        </div>
+
+        <!-- Pro (featured) -->
+        <div class="pricing-card featured">
+          <div>
+            <div class="plan-badge">Most popular</div>
+            <div class="plan-name" style="margin-top:10px;">Pro</div>
+            <div class="plan-price" style="margin-top:12px;">
+              <div class="plan-price-amount">$12</div>
+              <div class="plan-price-period">/ month</div>
+            </div>
+          </div>
+          <p class="plan-desc">For builders shipping frequently. Unlimited sites, real domains.</p>
+          <div class="plan-divider"></div>
+          <ul class="plan-features">
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Unlimited sites
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Unlimited deploys
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              20 GB storage
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Custom domains + auto TLS
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Password protection
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Deploy history + rollback
+            </li>
+          </ul>
+          <button class="plan-cta plan-cta-filled" style="opacity:0.5;cursor:default;pointer-events:none">Free during beta</button>
+        </div>
+
+        <!-- Team -->
+        <div class="pricing-card">
+          <div>
+            <div class="plan-name">Team</div>
+            <div class="plan-price" style="margin-top:12px;">
+              <div class="plan-price-amount">$49</div>
+              <div class="plan-price-period">/ month</div>
+            </div>
+          </div>
+          <p class="plan-desc">For teams running multiple agents and client projects at scale.</p>
+          <div class="plan-divider"></div>
+          <ul class="plan-features">
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Everything in Pro
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              5 team members
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              100 GB storage
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Priority support
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Shared API keys
+            </li>
+            <li class="plan-feature-item">
+              <svg class="plan-check check-active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Audit logs
+            </li>
+          </ul>
+          <button class="plan-cta plan-cta-outline" style="opacity:0.5;cursor:default;pointer-events:none">Free during beta</button>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-top">
+          <div class="footer-brand">
+            <div class="nav-logo" style="font-size:16px;">
+              <span class="logo-dot"></span>
+              ItsLive
+            </div>
+            <p class="footer-tagline">Website hosting built for the AI age. Deploy from any agent in seconds.</p>
+          </div>
+          <div class="footer-links-group">
+            <div class="footer-col">
+              <div class="footer-col-label">Product</div>
+              <a href="#features">Features</a>
+              <a href="#pricing">Pricing</a>
+              <a href="https://docs.itslive.dev">Docs</a>
+              <a href="https://status.itslive.dev">Status</a>
+            </div>
+            <div class="footer-col">
+              <div class="footer-col-label">Developers</div>
+              <a href="https://api.itslive.dev/llms.txt">llms.txt</a>
+              <a href="https://docs.itslive.dev/api">API Reference</a>
+              <a href="https://github.com/itslive">GitHub</a>
+              <a href="https://blog.itslive.dev">Blog</a>
+            </div>
+            <div class="footer-col">
+              <div class="footer-col-label">Company</div>
+              <a href="/about">About</a>
+              <a href="/changelog">Changelog</a>
+              <a href="mailto:hello@itslive.dev">Contact</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer-bottom">
+          <div class="footer-copy">2025 ItsLive. All rights reserved.</div>
+          <div class="footer-legal">
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+            <a href="/security">Security</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function copyPrompt() {
+      const text = 'Read https://api.itslive.dev/llms.txt and deploy a site for me. My email: [your email here]';
+      const btn = document.getElementById('copy-btn');
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('copied');
+        btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied';
+        setTimeout(function() {
+          btn.classList.remove('copied');
+          btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy';
+        }, 2000);
+      }).catch(function() {
+        btn.textContent = 'Failed';
+        setTimeout(function() {
+          btn.textContent = 'Copy';
+        }, 2000);
+      });
+    }
+  </script>
+
+</body>
+</html>

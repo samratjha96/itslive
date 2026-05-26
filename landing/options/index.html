@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ItsLive — Design Options</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0f0f11;
+      color: #e8e8ec;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      padding: 56px 48px 80px;
+    }
+    @media (max-width: 640px) { body { padding: 32px 20px 60px; } }
+
+    header { margin-bottom: 56px; }
+    .logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px; font-weight: 500;
+      color: #52525b; letter-spacing: .06em;
+      text-transform: uppercase; margin-bottom: 32px;
+    }
+    h1 {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 800; letter-spacing: -.04em;
+      line-height: 1.1; margin-bottom: 12px;
+    }
+    .sub {
+      font-size: 15px; color: #71717a; line-height: 1.6; max-width: 480px;
+    }
+    .sub strong { color: #a1a1aa; font-weight: 600; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 20px;
+    }
+    @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 14px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      display: flex; flex-direction: column;
+      transition: border-color .2s, transform .15s;
+      cursor: pointer;
+    }
+    .card:hover { border-color: #52525b; transform: translateY(-2px); }
+    .card:active { transform: translateY(0); }
+
+    .card-preview {
+      height: 220px;
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid #27272a;
+    }
+    .card-preview iframe {
+      width: 1280px;
+      height: 900px;
+      border: none;
+      transform-origin: top left;
+      transform: scale(0.281); /* 360/1280 */
+      pointer-events: none;
+      position: absolute; top: 0; left: 0;
+    }
+
+    .card-body { padding: 20px 22px 22px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .card-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; font-weight: 500; color: #52525b;
+      letter-spacing: .08em; text-transform: uppercase;
+    }
+    .card-title { font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
+    .card-desc { font-size: 13px; color: #71717a; line-height: 1.5; flex: 1; }
+    .card-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 4px; }
+    .tag {
+      font-size: 11px; font-weight: 600;
+      padding: 3px 9px; border-radius: 100px;
+      letter-spacing: .02em;
+    }
+
+    /* Color-coded palettes per option */
+    .v1 .card-preview { background: #0a0a0a; }
+    .v1 .card-title-accent { color: #00d17a; }
+    .v1 .tag-primary { background: rgba(0,209,122,.1); color: #00d17a; border: 1px solid rgba(0,209,122,.2); }
+    .v1 .tag-secondary { background: #1a1a1a; color: #555; border: 1px solid #222; }
+
+    .v2 .card-preview { background: #f8f7f4; }
+    .v2 .card-title-accent { color: #dc2626; }
+    .v2 .tag-primary { background: rgba(220,38,38,.1); color: #dc2626; border: 1px solid rgba(220,38,38,.2); }
+    .v2 .tag-secondary { background: #1a1a1a; color: #555; border: 1px solid #222; }
+
+    .v3 .card-preview { background: #05070f; }
+    .v3 .card-title-accent { color: #22d3ee; }
+    .v3 .tag-primary { background: rgba(34,211,238,.1); color: #22d3ee; border: 1px solid rgba(34,211,238,.2); }
+    .v3 .tag-secondary { background: #1a1a1a; color: #555; border: 1px solid #222; }
+
+    .v4 .card-preview { background: #f2ede4; }
+    .v4 .card-title-accent { color: #ff3d00; }
+    .v4 .tag-primary { background: rgba(255,61,0,.1); color: #ff3d00; border: 1px solid rgba(255,61,0,.2); }
+    .v4 .tag-secondary { background: #1a1a1a; color: #555; border: 1px solid #222; }
+
+    .v5 .card-preview { background: #0f0d0a; }
+    .v5 .card-title-accent { color: #f59e0b; }
+    .v5 .tag-primary { background: rgba(245,158,11,.1); color: #f59e0b; border: 1px solid rgba(245,158,11,.2); }
+    .v5 .tag-secondary { background: #1a1a1a; color: #555; border: 1px solid #222; }
+
+    .open-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 14px; padding: 8px 14px;
+      border-radius: 7px; font-size: 12.5px; font-weight: 700;
+      background: #27272a; color: #a1a1aa;
+      transition: background .15s, color .15s;
+      align-self: flex-start;
+    }
+    .card:hover .open-btn { background: #3f3f46; color: #e4e4e7; }
+    .open-btn svg { width: 12px; height: 12px; }
+
+    footer {
+      margin-top: 56px;
+      padding-top: 28px;
+      border-top: 1px solid #27272a;
+      font-size: 12px; color: #3f3f46;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">itslive / design review</div>
+  <h1>5 directions.<br>Pick one.</h1>
+  <p class="sub">
+    Each is a complete landing page mockup. <strong>Click any card</strong> to open it full screen.
+    All five cover hero, getting started, features, and pricing.
+  </p>
+</header>
+
+<div class="grid">
+
+  <a class="card v1" href="v1.html" target="_blank">
+    <div class="card-preview">
+      <iframe src="v1.html" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+    </div>
+    <div class="card-body">
+      <div class="card-num">Option 01</div>
+      <div class="card-title">Terminal <span class="card-title-accent">Dark</span></div>
+      <div class="card-desc">Pure monospace aesthetic. Code-first, minimal, uncompromising. Geist Mono headline. Feature rows as horizontal rules, not cards.</div>
+      <div class="card-tags">
+        <span class="tag tag-primary">Dark</span>
+        <span class="tag tag-secondary">Mono type</span>
+        <span class="tag tag-secondary">Minimal</span>
+      </div>
+      <div class="open-btn">
+        Open full screen
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </div>
+    </div>
+  </a>
+
+  <a class="card v2" href="v2.html" target="_blank">
+    <div class="card-preview">
+      <iframe src="v2.html" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+    </div>
+    <div class="card-body">
+      <div class="card-num">Option 02</div>
+      <div class="card-title">Light <span class="card-title-accent">Editorial</span></div>
+      <div class="card-desc">Warm off-white. Editorial magazine rhythm with section numbers. Outfit font. Red accent. Zigzag feature layout.</div>
+      <div class="card-tags">
+        <span class="tag tag-primary">Light</span>
+        <span class="tag tag-secondary">Editorial</span>
+        <span class="tag tag-secondary">Airy</span>
+      </div>
+      <div class="open-btn">
+        Open full screen
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </div>
+    </div>
+  </a>
+
+  <a class="card v3" href="v3.html" target="_blank">
+    <div class="card-preview">
+      <iframe src="v3.html" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+    </div>
+    <div class="card-body">
+      <div class="card-num">Option 03</div>
+      <div class="card-title">Deep Navy <span class="card-title-accent">Premium</span></div>
+      <div class="card-desc">Linear/Raycast-inspired. Deep navy, faint grid texture, cyan accent. Layered depth, refined, serious SaaS feel.</div>
+      <div class="card-tags">
+        <span class="tag tag-primary">Dark</span>
+        <span class="tag tag-secondary">Premium</span>
+        <span class="tag tag-secondary">Grid texture</span>
+      </div>
+      <div class="open-btn">
+        Open full screen
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </div>
+    </div>
+  </a>
+
+  <a class="card v4" href="v4.html" target="_blank">
+    <div class="card-preview">
+      <iframe src="v4.html" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+    </div>
+    <div class="card-body">
+      <div class="card-num">Option 04</div>
+      <div class="card-title">Cream <span class="card-title-accent">Brutalist</span></div>
+      <div class="card-desc">Warm cream, 2px borders, zero rounded corners. Massive type at 8.5vw. Orange-red accent. Features as full-width strips, not cards.</div>
+      <div class="card-tags">
+        <span class="tag tag-primary">Light</span>
+        <span class="tag tag-secondary">Brutalist</span>
+        <span class="tag tag-secondary">Bold type</span>
+      </div>
+      <div class="open-btn">
+        Open full screen
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </div>
+    </div>
+  </a>
+
+  <a class="card v5" href="v5.html" target="_blank">
+    <div class="card-preview">
+      <iframe src="v5.html" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+    </div>
+    <div class="card-body">
+      <div class="card-num">Option 05</div>
+      <div class="card-title">Dark <span class="card-title-accent">Amber</span></div>
+      <div class="card-desc">Warm near-black with amber/gold accents. Plus Jakarta Sans. Feels premium and editorial at the same time. Asymmetric hero.</div>
+      <div class="card-tags">
+        <span class="tag tag-primary">Dark</span>
+        <span class="tag tag-secondary">Warm</span>
+        <span class="tag tag-secondary">Premium</span>
+      </div>
+      <div class="open-btn">
+        Open full screen
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </div>
+    </div>
+  </a>
+
+</div>
+
+<footer>Open each in a new tab for the full experience. iframes above are scaled previews only.</footer>
+
+</body>
+</html>

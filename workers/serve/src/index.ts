@@ -37,11 +37,15 @@ export default {
     const url = new URL(request.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
 
-    // Root — serve a landing placeholder
+    // Root — serve landing page from R2 (update by uploading to _landing/index.html)
     if (pathParts.length === 0) {
-      return new Response('ItsLive — Web hosting for AI agents. Visit the API at itslive-api.samratj.workers.dev', {
-        headers: { 'Content-Type': 'text/plain' },
-      });
+      const landing = await env.SITES.get('_landing/index.html');
+      if (landing && 'body' in landing) {
+        return new Response(landing.body, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+        });
+      }
+      return new Response('ItsLive', { headers: { 'Content-Type': 'text/plain' } });
     }
 
     const siteName = pathParts[0];
