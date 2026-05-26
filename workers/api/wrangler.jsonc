@@ -8,7 +8,8 @@
     {
       "binding": "DB",
       "database_name": "itslive-prod",
-      "database_id": "5c9c7362-a12a-4751-a7b9-5b7505c3bd66"
+      "database_id": "5c9c7362-a12a-4751-a7b9-5b7505c3bd66",
+      "migrations_dir": "../../migrations"
     }
   ],
 
