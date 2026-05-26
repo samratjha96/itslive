@@ -185,78 +185,79 @@
     /* GETTING STARTED */
     .getting-started {
       border-bottom: 2px solid var(--border);
+      padding: 88px 48px;
     }
-    .gs-header {
-      padding: 48px 48px 32px;
-      border-bottom: 2px solid var(--border);
+    .gs-inner {
+      max-width: 1280px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1.2fr;
+      gap: 80px; align-items: center;
     }
-    .gs-header .section-label { margin-bottom: 10px; }
-    .gs-header h2 {
-      font-size: clamp(26px, 3vw, 40px); font-weight: 700;
-      letter-spacing: -0.03em; text-transform: uppercase; margin-top: 8px;
-    }
-    .gs-body {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 0;
-    }
-    .gs-left {
-      padding: 48px; border-right: 2px solid var(--border);
-    }
-    .gs-left p {
-      font-size: 16px; line-height: 1.65; color: var(--muted); margin-bottom: 20px; max-width: 420px;
-    }
-    .gs-left p strong { color: var(--text); font-weight: 600; }
-    .gs-steps { display: flex; flex-direction: column; gap: 0; margin-top: 32px; }
-    .gs-step {
-      display: flex; gap: 14px; align-items: flex-start;
-      padding: 16px 0; border-top: 1px solid var(--surface);
-    }
-    .gs-step:first-child { border-top: none; padding-top: 0; }
-    .gs-step-num {
-      flex-shrink: 0; width: 26px; height: 26px;
-      border: 2px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; font-family: var(--mono);
-    }
-    .gs-step-text { font-size: 14px; line-height: 1.5; padding-top: 2px; }
-    .gs-step-text strong { font-weight: 600; }
-
-    .gs-right { padding: 48px; }
-    .prompt-box { border: 2px solid var(--border); }
-    .prompt-box-header {
-      background: var(--text);
-      padding: 11px 16px;
-      display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 2px solid var(--border);
-    }
-    .prompt-box-header span {
+    .gs-label {
       font-family: var(--mono); font-size: 10px; font-weight: 500;
-      letter-spacing: 0.1em; text-transform: uppercase; color: var(--bg);
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 16px;
+    }
+    .gs-inner h2 {
+      font-size: clamp(30px, 3.2vw, 48px); font-weight: 700;
+      letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 18px;
+    }
+    .gs-intro {
+      font-size: 16px; color: var(--muted); line-height: 1.7;
+      max-width: 400px; margin-bottom: 36px;
+    }
+    .gs-steps { display: flex; flex-direction: column; }
+    .gs-step {
+      display: flex; gap: 18px; padding: 18px 0;
+      border-top: 1px solid rgba(17,16,8,.14);
+    }
+    .gs-step:last-child { border-bottom: 1px solid rgba(17,16,8,.14); }
+    .gs-num {
+      font-family: var(--mono); font-size: 11px; font-weight: 500;
+      color: var(--accent); letter-spacing: 0.06em;
+      flex-shrink: 0; width: 22px; padding-top: 1px;
+    }
+    .gs-step-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .gs-step-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+    /* Prompt box — lighter editorial style */
+    .prompt-box {
+      background: var(--surface);
+      border: 1.5px solid rgba(17,16,8,.18);
+      border-radius: 8px; overflow: hidden;
+      box-shadow: 0 4px 20px -4px rgba(17,16,8,.08);
+    }
+    .prompt-box-header {
+      padding: 11px 18px; border-bottom: 1px solid rgba(17,16,8,.12);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .prompt-box-label {
+      font-family: var(--mono); font-size: 10px; font-weight: 500;
+      color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
     }
     .copy-btn {
       display: flex; align-items: center; gap: 5px;
-      background: transparent; border: 1px solid rgba(242,237,228,.25);
-      color: var(--bg); padding: 4px 10px;
+      background: transparent; border: 1px solid rgba(17,16,8,.2);
+      color: var(--muted); padding: 4px 10px;
       font-size: 10px; font-weight: 600; font-family: var(--font);
       letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
-      transition: border-color 0.12s;
+      border-radius: 3px; transition: color 0.12s, border-color 0.12s;
     }
-    .copy-btn:hover { border-color: rgba(242,237,228,.6); }
+    .copy-btn:hover { color: var(--text); border-color: rgba(17,16,8,.4); }
     .copy-btn svg { width: 11px; height: 11px; }
     .prompt-body {
-      padding: 20px 20px; font-family: var(--mono);
+      padding: 20px 18px; font-family: var(--mono);
       font-size: 13px; line-height: 1.8; color: var(--text);
       user-select: all; white-space: pre-wrap;
     }
     .prompt-body em { font-style: italic; color: var(--muted); }
     .prompt-body strong { color: var(--accent); font-weight: 500; }
     .prompt-note {
-      padding: 10px 16px; border-top: 2px solid var(--border);
+      padding: 10px 18px; border-top: 1px solid rgba(17,16,8,.1);
       font-size: 11px; color: var(--muted); font-family: var(--mono);
+      display: flex; align-items: center; gap: 6px;
     }
     @media (max-width: 900px) {
-      .gs-body { grid-template-columns: 1fr; }
-      .gs-left { border-right: none; border-bottom: 2px solid var(--border); }
+      .gs-inner { grid-template-columns: 1fr; gap: 48px; }
     }
 
     /* HOW IT WORKS */
@@ -457,14 +458,12 @@
       .how-header,
       .features-header { flex-direction: column; gap: 8px; }
 
-      .gs-header,
       .how-header,
       .features-header,
       .pricing-header,
       .api-header { padding: 32px 20px 24px; }
 
-      .gs-left,
-      .gs-right { padding: 28px 20px; }
+      .getting-started { padding: 48px 20px; }
 
       .stat-item { padding: 20px 20px; }
       .stat-item:nth-child(2) { border-right: none; }
@@ -565,37 +564,46 @@
 
 <!-- GETTING STARTED -->
 <section class="getting-started" id="getting-started">
-  <div class="gs-header">
-    <div class="section-label">Getting started</div>
-    <h2>Your setup guide is one message.</h2>
-  </div>
-  <div class="gs-body">
-    <div class="gs-left">
-      <p>Copy the prompt below. Paste it into <strong>Claude, ChatGPT, or any AI assistant.</strong> That's the entire onboarding.</p>
-      <p>Your AI reads the docs, asks for your email, and has a live URL ready before you finish your coffee.</p>
+  <div class="gs-inner">
+    <div>
+      <div class="gs-label">02 / Getting started</div>
+      <h2>Your setup guide<br>is one message.</h2>
+      <p class="gs-intro">Copy the prompt below. Paste it into Claude, ChatGPT, or any AI assistant. That's the entire onboarding.</p>
       <div class="gs-steps">
         <div class="gs-step">
-          <div class="gs-step-num">01</div>
-          <div class="gs-step-text"><strong>You do one thing</strong><br>Check your email, copy the code, paste it to your AI.</div>
+          <span class="gs-num">01</span>
+          <div>
+            <div class="gs-step-title">You do one thing</div>
+            <div class="gs-step-desc">Check your email, copy the code, paste it to your AI.</div>
+          </div>
         </div>
         <div class="gs-step">
-          <div class="gs-step-num">02</div>
-          <div class="gs-step-text"><strong>Your AI gets access</strong><br>A key arrives in the response — no dashboard, no redirect.</div>
+          <span class="gs-num">02</span>
+          <div>
+            <div class="gs-step-title">Your AI gets access</div>
+            <div class="gs-step-desc">A key arrives in the response — no dashboard, no redirect.</div>
+          </div>
         </div>
         <div class="gs-step">
-          <div class="gs-step-num">03</div>
-          <div class="gs-step-text"><strong>A URL is ready instantly</strong><br>Auto-generated, globally unique. Custom names on paid plans.</div>
+          <span class="gs-num">03</span>
+          <div>
+            <div class="gs-step-title">A URL is ready instantly</div>
+            <div class="gs-step-desc">Auto-generated, globally unique. Custom names on paid plans.</div>
+          </div>
         </div>
         <div class="gs-step">
-          <div class="gs-step-num">04</div>
-          <div class="gs-step-text"><strong>Your site goes live</strong><br>Upload HTML, CSS, JS, images. Online within a second.</div>
+          <span class="gs-num">04</span>
+          <div>
+            <div class="gs-step-title">Your site goes live</div>
+            <div class="gs-step-desc">Upload HTML, CSS, JS, images. Online within a second.</div>
+          </div>
         </div>
       </div>
     </div>
-    <div class="gs-right">
+    <div>
       <div class="prompt-box">
         <div class="prompt-box-header">
-          <span>Paste into your AI</span>
+          <span class="prompt-box-label">Paste into your AI</span>
           <button class="copy-btn" onclick="copyPrompt(this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -603,12 +611,15 @@
             Copy
           </button>
         </div>
-        <div class="prompt-body" id="prompt-text">Read <strong>https://itslive-api.zasamrat.workers.dev/llms.txt</strong> and deploy a site for me.
+        <div class="prompt-body" id="prompt-text">Read <strong data-api-path="/llms.txt"></strong> and deploy a site for me.
 
 My email: <em>[your email here]</em>
 
 Follow the onboarding steps in the docs. Ask me for the verification code when prompted. Once I give you the code, complete the signup and deploy the site I describe.</div>
-        <div class="prompt-note">Replace [your email here] with your email before sending.</div>
+        <div class="prompt-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Replace [your email here] before sending.
+        </div>
       </div>
     </div>
   </div>
@@ -662,22 +673,22 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
         </div>
         <div class="terminal-body" style="font-size:12px;line-height:1.85;padding:20px">
 <span class="t-comment"># 1. Request a code</span><br>
-<span class="t-cmd">curl</span> -X POST https://itslive-api.zasamrat.workers.dev/signup \<br>
+<span class="t-cmd">curl</span> -X POST <span data-api-path="/signup"></span> \<br>
 &nbsp;&nbsp;-d '{"email":"you@example.com"}'<br>
 <span class="t-res">→ "Check your email for a code."</span><br>
 <br>
 <span class="t-comment"># You paste: AH7X2K9</span><br>
-<span class="t-cmd">curl</span> -X POST https://itslive-api.zasamrat.workers.dev/verify \<br>
+<span class="t-cmd">curl</span> -X POST <span data-api-path="/verify"></span> \<br>
 &nbsp;&nbsp;-d '{"email":"you@example.com","code":"AH7X2K9"}'<br>
 <span class="t-res">→ {"api_key": "il_live_..."}</span><br>
 <br>
 <span class="t-comment"># 2. Create a site</span><br>
-<span class="t-cmd">curl</span> -X POST https://itslive-api.zasamrat.workers.dev/sites \<br>
+<span class="t-cmd">curl</span> -X POST <span data-api-path="/sites"></span> \<br>
 &nbsp;&nbsp;-H "X-API-Key: il_live_..."<br>
 <span class="t-res">→ {"url": "https://violet-crane-42.itslive.dev"}</span><br>
 <br>
 <span class="t-comment"># 3. Publish your site</span><br>
-<span class="t-cmd">curl</span> -X PUT https://itslive-api.zasamrat.workers.dev/sites/violet-crane-42 \<br>
+<span class="t-cmd">curl</span> -X PUT <span data-api-path="/sites/violet-crane-42"></span> \<br>
 &nbsp;&nbsp;-H "X-API-Key: il_live_..." \<br>
 &nbsp;&nbsp;--data-binary @mysite.zip<br>
 <span class="t-ok">✓ Live at https://violet-crane-42.itslive.dev</span>
@@ -832,7 +843,7 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
     <div class="section-label">API Reference</div>
     <h2>The docs live at a URL.</h2>
     <p>We don't list endpoints on marketing pages — they'd be stale the moment we ship something new. The canonical reference is a plain-text file at a stable URL, formatted so both humans and AI agents can read it directly.</p>
-    <a href="https://itslive-api.zasamrat.workers.dev/llms.txt" target="_blank">
+    <a data-api-path="/llms.txt" target="_blank">
       Read the API docs
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
@@ -848,11 +859,21 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
   <ul class="footer-links">
     <li><a href="#how">How it works</a></li>
     <li><a href="#pricing">Pricing</a></li>
-    <li><a href="https://itslive-api.zasamrat.workers.dev/llms.txt" target="_blank">llms.txt</a></li>
+    <li><a data-api-path="/llms.txt" target="_blank">llms.txt</a></li>
   </ul>
 </footer>
 
 <script>
+// Change this one line when the API domain changes
+const API_BASE = 'https://itslive-api.zasamrat.workers.dev';
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-api-path]').forEach(el => {
+    const url = API_BASE + el.dataset.apiPath;
+    if (el.tagName === 'A') { el.href = url; } else { el.textContent = url; }
+  });
+});
+
 function copyPrompt(btn) {
   const text = document.getElementById('prompt-text').innerText;
   navigator.clipboard.writeText(text).then(() => {
