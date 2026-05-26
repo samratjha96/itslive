@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { unzipSync } from 'fflate';
 import { sha256, hashPassword } from '../lib/crypto';
 import { ulid } from '../lib/id';
 import { generateSlug, RESERVED_NAMES, SLUG_PATTERN } from '../lib/words';
@@ -13,7 +14,6 @@ router.use('*', authMiddleware);
 
 const CreateSiteSchema = z.object({
   name: z.string().optional(),
-  type: z.enum(['static', 'dynamic']).default('static'),
 });
 
 const AccessSchema = z.object({
@@ -30,11 +30,7 @@ router.post('/', async c => {
   if (!parsed.success) {
     return c.json({ error: { code: 'INVALID_BODY', message: 'Invalid request body.' } }, 400);
   }
-  const { name: requestedName, type } = parsed.data;
-
-  if (type === 'dynamic' && plan === 'free') {
-    return c.json({ error: { code: 'PLAN_REQUIRED', message: 'Dynamic sites require Builder plan or higher.' } }, 402);
-  }
+  const { name: requestedName } = parsed.data;
 
   const siteCount = await c.env.DB
     .prepare('SELECT COUNT(*) as n FROM sites WHERE user_id = ? AND status = ?')
@@ -85,7 +81,7 @@ router.post('/', async c => {
   try {
     await c.env.DB
       .prepare('INSERT INTO sites (id, user_id, name, slug_type, type, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(siteId, userId, siteName, slugType, type, 'active', now)
+      .bind(siteId, userId, siteName, slugType, 'static', 'active', now)
       .run();
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -98,7 +94,7 @@ router.post('/', async c => {
   }
 
   const url = siteUrl(c.env.SERVE_BASE_URL, siteName);
-  return c.json({ site_id: siteId, url, slug_type: slugType, type, name: siteName, created_at: new Date(now).toISOString() }, 201);
+  return c.json({ site_id: siteId, url, slug_type: slugType, name: siteName, created_at: new Date(now).toISOString() }, 201);
 });
 
 // ── GET /sites ────────────────────────────────────────────────────────────────
@@ -115,7 +111,6 @@ router.get('/', async c => {
       name: s.name,
       url: siteUrl(c.env.SERVE_BASE_URL, s.name),
       slug_type: s.slug_type,
-      type: s.type,
       status: s.status,
       deployed_at: s.deployed_at ? new Date(s.deployed_at).toISOString() : null,
       password_protected: s.password_hash !== null,
@@ -132,28 +127,30 @@ router.get('/:name', async c => {
   if (!site) return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
 
   const [deploysRes, countRes] = await c.env.DB.batch([
-    c.env.DB.prepare('SELECT deployed_at, size_bytes, file_count, sha256, agent_ua FROM deploys WHERE site_id = ? ORDER BY deployed_at DESC LIMIT 5').bind(site.id),
+    c.env.DB.prepare('SELECT id, deployed_at, size_bytes, file_count, sha256, status FROM deploys WHERE site_id = ? ORDER BY deployed_at DESC LIMIT 5').bind(site.id),
     c.env.DB.prepare('SELECT COUNT(*) as n FROM deploys WHERE site_id = ?').bind(site.id),
   ]);
-  const deploys = deploysRes.results as { deployed_at: number; size_bytes: number; file_count: number; sha256: string; agent_ua: string | null }[];
+  const deploys = deploysRes.results as { id: string; deployed_at: number; size_bytes: number; file_count: number; sha256: string; status: string }[];
   const deployCount = countRes.results[0] as { n: number } | undefined;
 
   return c.json({
     name: site.name,
     url: siteUrl(c.env.SERVE_BASE_URL, site.name),
     slug_type: site.slug_type,
-    type: site.type,
     status: site.status,
     created_at: new Date(site.created_at).toISOString(),
     deployed_at: site.deployed_at ? new Date(site.deployed_at).toISOString() : null,
+    active_deploy_id: site.active_deploy_id,
     password_protected: site.password_hash !== null,
     session_ttl_hrs: site.session_ttl_hrs,
     deploy_count: deployCount?.n ?? 0,
     last_5_deploys: deploys.map(d => ({
+      deploy_id: d.id,
       deployed_at: new Date(d.deployed_at).toISOString(),
       size_bytes: d.size_bytes,
       file_count: d.file_count,
       sha256: d.sha256,
+      status: d.status,
     })),
   });
 });
@@ -186,10 +183,23 @@ router.put('/:name', async c => {
   const contentType = c.req.header('Content-Type') ?? '';
   const files: { path: string; body: Uint8Array; contentType: string }[] = [];
 
-  if (contentType.startsWith('multipart/form-data')) {
+  if (contentType.startsWith('application/zip') || contentType === 'application/octet-stream') {
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    let unzipped: Record<string, Uint8Array>;
+    try {
+      unzipped = unzipSync(bytes);
+    } catch {
+      return c.json({ error: { code: 'INVALID_ZIP', message: 'Could not parse ZIP archive.' } }, 400);
+    }
+    for (const [rawPath, data] of Object.entries(unzipped)) {
+      if (rawPath.endsWith('/')) continue; // skip directory entries
+      const safePath = sanitizePath(rawPath);
+      if (!safePath) continue;
+      files.push({ path: safePath, body: data, contentType: inferContentType(safePath) });
+    }
+  } else if (contentType.startsWith('multipart/form-data')) {
     const form = await c.req.formData();
     for (const [, value] of form.entries()) {
-      // Blob/File values have arrayBuffer; string values do not
       if (typeof value !== 'string' && 'arrayBuffer' in value) {
         const file = value as Blob & { name?: string; type: string };
         const bytes = new Uint8Array(await file.arrayBuffer());
@@ -198,13 +208,20 @@ router.put('/:name', async c => {
         files.push({ path: safePath, body: bytes, contentType: file.type || inferContentType(safePath) });
       }
     }
-    if (files.length === 0) {
-      return c.json({ error: { code: 'NO_FILES', message: 'No files provided.' } }, 400);
-    }
   } else {
-    // Single file as raw body
+    // Raw body — treat as single index.html
     const bytes = new Uint8Array(await c.req.arrayBuffer());
     files.push({ path: 'index.html', body: bytes, contentType: 'text/html; charset=utf-8' });
+  }
+
+  if (files.length === 0) {
+    return c.json({ error: { code: 'NO_FILES', message: 'No files provided.' } }, 400);
+  }
+  if (!files.some(f => f.path === 'index.html')) {
+    return c.json({ error: { code: 'ENTRYPOINT_MISSING', message: 'Deploy must include index.html.' } }, 400);
+  }
+  if (files.length > 100) {
+    return c.json({ error: { code: 'TOO_MANY_FILES', message: 'Deploy cannot exceed 100 files.' } }, 400);
   }
 
   const totalSize = files.reduce((acc, f) => acc + f.body.byteLength, 0);
@@ -215,11 +232,19 @@ router.put('/:name', async c => {
 
   const now = Date.now();
   const deployId = ulid();
+  const objectPrefix = `sites/${userId}/${name}/${deployId}`;
+  const combined = files.map(f => f.path + ':' + f.body.byteLength).join('|');
+  const deployHash = await sha256(combined);
 
-  // Write files to R2 — path is always server-constructed
+  // Insert deploy record as 'uploading' before touching R2.
+  // If R2 writes fail, the deploy stays 'uploading' and the old version remains live.
+  await c.env.DB
+    .prepare('INSERT INTO deploys (id, site_id, deployed_at, size_bytes, file_count, sha256, status, object_prefix, agent_ua) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(deployId, site.id, now, totalSize, files.length, deployHash, 'uploading', objectPrefix, c.req.header('User-Agent') ?? null)
+    .run();
+
   for (const file of files) {
-    const r2Key = `sites/${userId}/${name}/${file.path}`;
-    await c.env.SITES.put(r2Key, file.body, {
+    await c.env.SITES.put(`${objectPrefix}/${file.path}`, file.body, {
       httpMetadata: {
         contentType: file.contentType,
         cacheControl: `public, max-age=${cacheTtl}`,
@@ -228,20 +253,22 @@ router.put('/:name', async c => {
     });
   }
 
-  // Compute combined sha256 for deploy record
-  const combined = files.map(f => f.path + ':' + f.body.byteLength).join('|');
-  const deployHash = await sha256(combined);
-
-  await c.env.DB.batch([
-    c.env.DB.prepare('INSERT INTO deploys (id, site_id, deployed_at, size_bytes, file_count, sha256, agent_ua) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(deployId, site.id, now, totalSize, files.length, deployHash, c.req.header('User-Agent') ?? null),
-    c.env.DB.prepare('UPDATE sites SET deployed_at = ? WHERE id = ?').bind(now, site.id),
-  ]);
+  // Atomic flip: mark new deploy active, supersede old one, update site pointer
+  const flipStatements = [
+    c.env.DB.prepare("UPDATE deploys SET status = 'active' WHERE id = ?").bind(deployId),
+    c.env.DB.prepare('UPDATE sites SET deployed_at = ?, active_deploy_id = ? WHERE id = ?').bind(now, deployId, site.id),
+  ];
+  if (site.active_deploy_id) {
+    flipStatements.push(
+      c.env.DB.prepare("UPDATE deploys SET status = 'superseded' WHERE id = ?").bind(site.active_deploy_id)
+    );
+  }
+  await c.env.DB.batch(flipStatements);
 
   await c.env.QUEUE.send({ type: 'post_deploy_cache_purge', site_name: name });
 
   const url = siteUrl(c.env.SERVE_BASE_URL, name);
-  return c.json({ url, deployed_at: new Date(now).toISOString(), size_bytes: totalSize, file_count: files.length, sha256: deployHash });
+  return c.json({ url, deploy_id: deployId, deployed_at: new Date(now).toISOString(), size_bytes: totalSize, file_count: files.length, sha256: deployHash });
 });
 
 // ── DELETE /sites/:name ───────────────────────────────────────────────────────

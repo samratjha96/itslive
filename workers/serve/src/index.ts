@@ -10,6 +10,7 @@ interface SiteRecord {
   name: string;
   status: string;
   cooling_until: number | null;
+  active_deploy_id: string | null;
   password_protected: boolean;
   session_ttl_hrs: number;
 }
@@ -64,6 +65,10 @@ export default {
       return notFound(siteName);
     }
 
+    if (!site.active_deploy_id) {
+      return notDeployed(siteName);
+    }
+
     // Password protection
     if (site.password_protected) {
       // POST /__auth is the login form submission (never cached)
@@ -93,11 +98,12 @@ async function lookupSite(env: Env, name: string): Promise<SiteRecord | null> {
   if (cached) return cached;
 
   const row = await env.DB
-    .prepare("SELECT id, user_id, name, status, cooling_until, password_hash, session_ttl_hrs FROM sites WHERE name = ? AND status != 'deleted'")
+    .prepare("SELECT id, user_id, name, status, cooling_until, active_deploy_id, password_hash, session_ttl_hrs FROM sites WHERE name = ? AND status != 'deleted'")
     .bind(name)
     .first<{
       id: string; user_id: string; name: string; status: string;
-      cooling_until: number | null; password_hash: string | null; session_ttl_hrs: number;
+      cooling_until: number | null; active_deploy_id: string | null;
+      password_hash: string | null; session_ttl_hrs: number;
     }>();
 
   if (!row) return null;
@@ -108,6 +114,7 @@ async function lookupSite(env: Env, name: string): Promise<SiteRecord | null> {
     name: row.name,
     status: row.status,
     cooling_until: row.cooling_until,
+    active_deploy_id: row.active_deploy_id,
     password_protected: row.password_hash !== null,
     session_ttl_hrs: row.session_ttl_hrs,
   };
@@ -195,7 +202,8 @@ async function handleLogin(request: Request, env: Env, site: SiteRecord): Promis
 // ── File serving ──────────────────────────────────────────────────────────────
 
 async function serveFile(env: Env, site: SiteRecord, filePath: string, request: Request): Promise<Response> {
-  const r2Key = `sites/${site.user_id}/${site.name}/${filePath}`;
+  const prefix = `sites/${site.user_id}/${site.name}/${site.active_deploy_id}`;
+  const r2Key = `${prefix}/${filePath}`;
   const object = await env.SITES.get(r2Key, {
     onlyIf: {
       etagMatches: request.headers.get('If-None-Match') ?? undefined,
@@ -205,7 +213,7 @@ async function serveFile(env: Env, site: SiteRecord, filePath: string, request: 
   if (!object) {
     // Try index.html fallback for SPA routing
     if (filePath !== 'index.html') {
-      const fallback = await env.SITES.get(`sites/${site.user_id}/${site.name}/index.html`);
+      const fallback = await env.SITES.get(`${prefix}/index.html`);
       if (fallback) {
         return r2ToResponse(fallback, 'text/html; charset=utf-8');
       }
@@ -293,6 +301,19 @@ function notFound(siteName: string): Response {
   <style>body{font-family:-apple-system,sans-serif;background:#09090b;color:#fafafa;min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}h1{font-size:48px;font-weight:800}p{color:#71717a}</style>
 </head>
 <body><h1>404</h1><p>${escapeHtml(siteName)} not found.</p></body>
+</html>`;
+  return new Response(html, { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
+function notDeployed(siteName: string): Response {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>No content — ${escapeHtml(siteName)}</title>
+  <style>body{font-family:-apple-system,sans-serif;background:#09090b;color:#fafafa;min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}h1{font-size:48px;font-weight:800}p{color:#71717a}</style>
+</head>
+<body><h1>🚧</h1><p>${escapeHtml(siteName)} exists but nothing has been deployed yet.</p></body>
 </html>`;
   return new Response(html, { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }

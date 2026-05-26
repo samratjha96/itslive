@@ -6,6 +6,7 @@ export interface Env {
   RESEND_API_KEY: string;
   SERVE_BASE_URL: string;
   ENVIRONMENT: string;
+  ALLOW_DEV_CODES?: string;
 }
 
 export interface User {
@@ -37,6 +38,7 @@ export interface Site {
   cooling_until: number | null;
   created_at: number;
   deployed_at: number | null;
+  active_deploy_id: string | null;
   worker_id: string | null;
   db_id: string | null;
   password_hash: string | null;
@@ -50,6 +52,9 @@ export interface Deploy {
   size_bytes: number;
   file_count: number;
   sha256: string;
+  status: 'uploading' | 'active' | 'superseded' | 'failed';
+  object_prefix: string | null;
+  manifest_json: string | null;
   agent_ua: string | null;
 }
 

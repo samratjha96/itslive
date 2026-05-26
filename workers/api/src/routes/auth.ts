@@ -58,7 +58,10 @@ router.post('/signup', async c => {
   }
   await c.env.QUEUE.send({ type: 'otp_email', email, code });
 
-  return c.json(SIGNUP_RESPONSE, 200);
+  // In non-production environments, include the code in the response so agents
+  // can complete the flow without a real email inbox.
+  const isDev = c.env.ENVIRONMENT !== 'production' || c.env.ALLOW_DEV_CODES === 'true';
+  return c.json(isDev ? { ...SIGNUP_RESPONSE, dev_code: code } : SIGNUP_RESPONSE, 200);
 });
 
 router.post('/verify', async c => {
