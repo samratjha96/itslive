@@ -36,6 +36,10 @@
         "dead_letter_queue": "itslive-dlq"
       }
     ]
+  },
+
+  "triggers": {
+    "crons": ["0 4 * * *"]
   }
 
   // Secrets — set via: npx wrangler secret put RESEND_API_KEY --name itslive-queue

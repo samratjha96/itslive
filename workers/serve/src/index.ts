@@ -13,6 +13,7 @@ interface SiteRecord {
   active_deploy_id: string | null;
   password_protected: boolean;
   session_ttl_hrs: number;
+  plan: 'free' | 'builder' | 'studio';
 }
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -32,13 +33,15 @@ const SECURITY_HEADERS: Record<string, string> = {
   ].join('; '),
 };
 
+const SERVE_DOMAIN = 'itslive.fyi';
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const pathParts = url.pathname.split('/').filter(Boolean);
+    const host = request.headers.get('Host') ?? url.hostname;
 
-    // Root — serve landing page from R2 (update by uploading to _landing/index.html)
-    if (pathParts.length === 0) {
+    // Apex domain or unrecognised host — serve landing page from R2
+    if (host === SERVE_DOMAIN || !host.endsWith('.' + SERVE_DOMAIN)) {
       const landing = await env.SITES.get('_landing/index.html');
       if (landing && 'body' in landing) {
         return new Response(landing.body, {
@@ -48,8 +51,9 @@ export default {
       return new Response('ItsLive', { headers: { 'Content-Type': 'text/plain' } });
     }
 
-    const siteName = pathParts[0];
-    const rawFilePath = pathParts.slice(1).join('/') || 'index.html';
+    const siteName = host.slice(0, -(1 + SERVE_DOMAIN.length));
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    const rawFilePath = pathParts.join('/') || 'index.html';
     const filePath = sanitizeFilePath(rawFilePath);
     if (!filePath) {
       return new Response('Bad request', { status: 400 });
@@ -59,6 +63,10 @@ export default {
 
     if (!site) {
       return notFound(siteName);
+    }
+
+    if (site.status === 'suspended') {
+      return suspended(siteName);
     }
 
     if (site.status === 'deleted_cooling') {
@@ -102,12 +110,19 @@ async function lookupSite(env: Env, name: string): Promise<SiteRecord | null> {
   if (cached) return cached;
 
   const row = await env.DB
-    .prepare("SELECT id, user_id, name, status, cooling_until, active_deploy_id, password_hash, session_ttl_hrs FROM sites WHERE name = ? AND status != 'deleted'")
+    .prepare(`
+      SELECT s.id, s.user_id, s.name, s.status, s.cooling_until,
+             s.active_deploy_id, s.password_hash, s.session_ttl_hrs, u.plan
+      FROM sites s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.name = ? AND s.status != 'deleted'
+    `)
     .bind(name)
     .first<{
       id: string; user_id: string; name: string; status: string;
       cooling_until: number | null; active_deploy_id: string | null;
       password_hash: string | null; session_ttl_hrs: number;
+      plan: 'free' | 'builder' | 'studio';
     }>();
 
   if (!row) return null;
@@ -121,6 +136,7 @@ async function lookupSite(env: Env, name: string): Promise<SiteRecord | null> {
     active_deploy_id: row.active_deploy_id,
     password_protected: row.password_hash !== null,
     session_ttl_hrs: row.session_ttl_hrs,
+    plan: row.plan,
   };
 
   await env.KV.put(kvKey, JSON.stringify(record), { expirationTtl: 60 });
@@ -157,11 +173,11 @@ async function handleLogin(request: Request, env: Env, site: SiteRecord): Promis
     return loginPage(site.name, 'Password required.', 400);
   }
 
-  // Fetch actual hash from D1 (not stored in KV)
+  // Fetch actual hash from D1 (not stored in KV for security)
   const row = await env.DB
-    .prepare('SELECT password_hash, session_ttl_hrs FROM sites WHERE id = ?')
+    .prepare('SELECT password_hash FROM sites WHERE id = ?')
     .bind(site.id)
-    .first<{ password_hash: string | null; session_ttl_hrs: number }>();
+    .first<{ password_hash: string | null }>();
 
   if (!row?.password_hash) {
     // Site no longer password protected — redirect to content
@@ -173,10 +189,8 @@ async function handleLogin(request: Request, env: Env, site: SiteRecord): Promis
     return loginPage(site.name, 'Incorrect password.', 401);
   }
 
-  // On free tier, invalidate any existing session before creating a new one
-  // (We approximate free-tier detection by checking session_ttl_hrs — free is fixed at 24)
-  const isFree = row.session_ttl_hrs === 24;
-  if (isFree) {
+  // Free plan: one concurrent session only — invalidate any existing session
+  if (site.plan === 'free') {
     const existing = await env.KV.list({ prefix: `session:${site.id}:`, limit: 10 });
     for (const key of existing.keys) {
       await env.KV.delete(key.name);
@@ -185,19 +199,19 @@ async function handleLogin(request: Request, env: Env, site: SiteRecord): Promis
 
   const token = generateToken();
   const tokenHash = await sha256(token);
-  const expiresAt = Date.now() + row.session_ttl_hrs * 3600 * 1000;
+  const expiresAt = Date.now() + site.session_ttl_hrs * 3600 * 1000;
 
   await env.KV.put(
     `session:${site.id}:${tokenHash}`,
     JSON.stringify({ created_at: Date.now(), expires_at: expiresAt }),
-    { expirationTtl: row.session_ttl_hrs * 3600 },
+    { expirationTtl: site.session_ttl_hrs * 3600 },
   );
 
   return new Response(null, {
     status: 302,
     headers: {
-      Location: '/' + site.name,
-      'Set-Cookie': `__ph_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/${site.name}`,
+      Location: '/',
+      'Set-Cookie': `__ph_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/`,
       'Cache-Control': 'no-store, no-cache',
     },
   });
@@ -285,7 +299,7 @@ function loginPage(siteName: string, error: string | null, status = 200): Respon
     <div class="logo">ItsLive</div>
     <h1>Access required</h1>
     <p class="site">${escapeHtml(siteName)}</p>
-    <form method="POST" action="/${escapeHtml(siteName)}/__auth">
+    <form method="POST" action="/__auth">
       <label for="password">Password</label>
       <input id="password" name="password" type="password" autofocus autocomplete="current-password" placeholder="Enter password">
       ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
@@ -329,6 +343,19 @@ function notDeployed(siteName: string): Response {
 <body><h1>🚧</h1><p>${escapeHtml(siteName)} exists but nothing has been deployed yet.</p></body>
 </html>`;
   return new Response(html, { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
+function suspended(siteName: string): Response {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Site suspended — ${escapeHtml(siteName)}</title>
+  <style>body{font-family:-apple-system,sans-serif;background:#09090b;color:#fafafa;min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}h1{font-size:48px;font-weight:800}p{color:#71717a}a{color:#a1a1aa}</style>
+</head>
+<body><h1>402</h1><p>${escapeHtml(siteName)} is suspended.</p><p><a href="https://itslive.fyi">Upgrade your plan</a> to restore access.</p></body>
+</html>`;
+  return new Response(html, { status: 402, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
 function gone(siteName: string): Response {

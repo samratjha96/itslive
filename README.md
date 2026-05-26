@@ -5,7 +5,7 @@
 No dashboards. No OAuth. No build pipeline. No configuration.  
 POST your HTML. Get a live URL back. Done.
 
-→ **[itslive.fyi](https://itslive-serve.zasamrat.workers.dev)**
+→ **[itslive.fyi](https://itslive.fyi)**
 
 ---
 
@@ -25,25 +25,25 @@ ItsLive fixes that.
 
 ```bash
 # 1. Get an API key (one-time)
-curl -X POST https://itslive-api.zasamrat.workers.dev/signup \
+curl -X POST https://api.itslive.fyi/signup \
   -H "Content-Type: application/json" \
   -d '{"email": "you@example.com"}'
 # → Check your email for a 6-character code
 
-curl -X POST https://itslive-api.zasamrat.workers.dev/verify \
+curl -X POST https://api.itslive.fyi/verify \
   -H "Content-Type: application/json" \
   -d '{"email": "you@example.com", "code": "ABC123"}'
 # → {"api_key": "il_live_..."}
 
 # 2. Create a site
-curl -X POST https://itslive-api.zasamrat.workers.dev/sites \
+curl -X POST https://api.itslive.fyi/sites \
   -H "X-API-Key: il_live_..." \
   -H "Content-Type: application/json" \
   -d '{}'
 # → {"name": "violet-crane-42", "url": "https://.../violet-crane-42"}
 
 # 3. Deploy
-curl -X PUT https://itslive-api.zasamrat.workers.dev/sites/violet-crane-42 \
+curl -X PUT https://api.itslive.fyi/sites/violet-crane-42 \
   -H "X-API-Key: il_live_..." \
   -H "Content-Type: text/html" \
   --data-binary @index.html
@@ -56,7 +56,7 @@ curl -X PUT https://itslive-api.zasamrat.workers.dev/sites/violet-crane-42 \
 
 ## Built for AI agents
 
-ItsLive ships a machine-readable [`llms.txt`](https://itslive-api.zasamrat.workers.dev/llms.txt) — a structured instruction file any LLM can follow to create, deploy, and manage sites end to end, without human intervention on the deploy step.
+ItsLive ships a machine-readable [`llms.txt`](https://api.itslive.fyi/llms.txt) — a structured instruction file any LLM can follow to create, deploy, and manage sites end to end, without human intervention on the deploy step.
 
 Ask Claude or ChatGPT to "deploy this using itslive.fyi" and it handles the whole flow autonomously.
 
@@ -89,9 +89,9 @@ Ask Claude or ChatGPT to "deploy this using itslive.fyi" and it handles the whol
 
 ## API reference
 
-Full agent-executable instructions at [`/llms.txt`](https://itslive-api.zasamrat.workers.dev/llms.txt).
+Full agent-executable instructions at [`/llms.txt`](https://api.itslive.fyi/llms.txt).
 
-**Base URL:** `https://itslive-api.zasamrat.workers.dev`
+**Base URL:** `https://api.itslive.fyi`
 
 **Auth:** `X-API-Key: il_live_...` header on every authenticated request. Never in query params.
 

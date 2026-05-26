@@ -8,10 +8,10 @@ const router = new Hono<{ Bindings: Env }>();
 router.use('*', authMiddleware);
 
 router.get('/usage', async c => {
-  const { userId, plan, keyId } = c.get('auth');
+  const { userId, plan } = c.get('auth');
 
   const siteCount = await c.env.DB
-    .prepare("SELECT COUNT(*) as n FROM sites WHERE user_id = ? AND status = 'active'")
+    .prepare("SELECT COUNT(*) as n FROM sites WHERE user_id = ? AND status IN ('active', 'suspended')")
     .bind(userId)
     .first<{ n: number }>();
 
@@ -38,13 +38,13 @@ router.get('/usage', async c => {
     .prepare(`
       SELECT COUNT(*) as n FROM deploys d
       INNER JOIN sites s ON s.id = d.site_id
-      WHERE s.user_id = ? AND d.deployed_at >= ?
+      WHERE s.user_id = ? AND d.deployed_at >= ? AND d.status != 'failed'
     `)
     .bind(userId, monthStart.getTime())
     .first<{ n: number }>();
 
   const window = Math.floor(Date.now() / (3600 * 1000));
-  const apiCallCount = Number(await c.env.KV.get(`ratelimit:${keyId}:${window}`) ?? '0');
+  const apiCallCount = Number(await c.env.KV.get(`ratelimit:${userId}:${window}`) ?? '0');
 
   const limits = PLAN_LIMITS[plan];
 

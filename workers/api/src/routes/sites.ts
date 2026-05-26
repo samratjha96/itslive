@@ -6,7 +6,7 @@ import { ulid } from '../lib/id';
 import { generateSlug, RESERVED_NAMES, SLUG_PATTERN } from '../lib/words';
 import { authMiddleware } from '../middleware/auth';
 import type { Env, Site } from '../types';
-import { PLAN_LIMITS as LIMITS } from '../types';
+import { PLAN_LIMITS } from '../types';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -18,7 +18,7 @@ const CreateSiteSchema = z.object({
 
 const AccessSchema = z.object({
   password: z.string().min(8).max(128),
-  session_ttl_hrs: z.number().int().min(1).max(168).default(24),
+  session_ttl_hrs: z.number().int().min(1).max(720).default(24),
 });
 
 // ── POST /sites ──────────────────────────────────────────────────────────────
@@ -31,14 +31,6 @@ router.post('/', async c => {
     return c.json({ error: { code: 'INVALID_BODY', message: 'Invalid request body.' } }, 400);
   }
   const { name: requestedName } = parsed.data;
-
-  const siteCount = await c.env.DB
-    .prepare('SELECT COUNT(*) as n FROM sites WHERE user_id = ? AND status = ?')
-    .bind(userId, 'active')
-    .first<{ n: number }>();
-  if ((siteCount?.n ?? 0) >= LIMITS[plan].sites) {
-    return c.json({ error: { code: 'PLAN_LIMIT_REACHED', message: `Your ${plan} plan allows ${LIMITS[plan].sites} active sites.` } }, 402);
-  }
 
   let siteName: string;
   let slugType: 'auto' | 'custom';
@@ -53,20 +45,27 @@ router.post('/', async c => {
     if (RESERVED_NAMES.has(requestedName)) {
       return c.json({ error: { code: 'NAME_RESERVED', message: 'This name is reserved.' } }, 409);
     }
-    const taken = await c.env.DB
-      .prepare("SELECT id FROM sites WHERE name = ? AND status != 'deleted'")
+    const existing = await c.env.DB
+      .prepare("SELECT id, user_id, status, cooling_until FROM sites WHERE name = ? AND status != 'deleted'")
       .bind(requestedName)
-      .first();
-    // Check cooling period too
-    const cooling = await c.env.DB
-      .prepare("SELECT user_id, cooling_until FROM sites WHERE name = ? AND status = 'deleted_cooling'")
-      .bind(requestedName)
-      .first<{ user_id: string; cooling_until: number }>();
-    if (cooling && cooling.user_id !== userId && cooling.cooling_until > Date.now()) {
-      return c.json({ error: { code: 'NAME_TAKEN', message: 'This name is temporarily unavailable.' } }, 409);
-    }
-    if (taken) {
-      return c.json({ error: { code: 'NAME_TAKEN', message: 'This site name is already taken.' } }, 409);
+      .first<{ id: string; user_id: string; status: string; cooling_until: number | null }>();
+
+    if (existing) {
+      if (existing.status !== 'deleted_cooling') {
+        return c.json({ error: { code: 'NAME_TAKEN', message: 'This site name is already taken.' } }, 409);
+      }
+      if (existing.user_id === userId) {
+        return c.json({ error: { code: 'SITE_IN_COOLING', message: 'This site is in its cooling-off period. Wait for it to fully expire before reusing the name.' } }, 409);
+      }
+      if ((existing.cooling_until ?? Infinity) > Date.now()) {
+        return c.json({ error: { code: 'NAME_TAKEN', message: 'This name is temporarily unavailable.' } }, 409);
+      }
+      // Expired cooling — flip to deleted so INSERT can proceed.
+      // UNIQUE constraint on name handles concurrent races via the catch block below.
+      await c.env.DB
+        .prepare("UPDATE sites SET status = 'deleted' WHERE id = ? AND status = 'deleted_cooling'")
+        .bind(existing.id)
+        .run();
     }
     siteName = requestedName;
     slugType = 'custom';
@@ -77,11 +76,19 @@ router.post('/', async c => {
 
   const siteId = ulid();
   const now = Date.now();
+  const limit = PLAN_LIMITS[plan].sites;
 
+  // Atomic site-count check + insert: the WHERE clause guards the limit and
+  // runs in a single SQLite statement, eliminating the TOCTOU race.
+  let insertResult;
   try {
-    await c.env.DB
-      .prepare('INSERT INTO sites (id, user_id, name, slug_type, type, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(siteId, userId, siteName, slugType, 'static', 'active', now)
+    insertResult = await c.env.DB
+      .prepare(
+        `INSERT INTO sites (id, user_id, name, slug_type, type, status, created_at)
+         SELECT ?, ?, ?, ?, 'static', 'active', ?
+         WHERE (SELECT COUNT(*) FROM sites WHERE user_id = ? AND status IN ('active', 'suspended')) < ?`
+      )
+      .bind(siteId, userId, siteName, slugType, now, userId, limit)
       .run();
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -93,7 +100,11 @@ router.post('/', async c => {
     throw err;
   }
 
-  const url = siteUrl(c.env.SERVE_BASE_URL, siteName);
+  if (insertResult.meta.changes === 0) {
+    return c.json({ error: { code: 'PLAN_LIMIT_REACHED', message: `Your ${plan} plan allows ${limit} active sites.` } }, 402);
+  }
+
+  const url = siteUrl(c.env.SERVE_DOMAIN, siteName);
   return c.json({ site_id: siteId, url, slug_type: slugType, name: siteName, created_at: new Date(now).toISOString() }, 201);
 });
 
@@ -102,14 +113,14 @@ router.post('/', async c => {
 router.get('/', async c => {
   const { userId } = c.get('auth');
   const sites = await c.env.DB
-    .prepare("SELECT id, name, slug_type, type, status, deployed_at, password_hash FROM sites WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC")
+    .prepare("SELECT id, name, slug_type, type, status, deployed_at, password_hash FROM sites WHERE user_id = ? AND status IN ('active', 'suspended') ORDER BY created_at DESC")
     .bind(userId)
     .all<Site>();
 
   return c.json({
     sites: (sites.results ?? []).map(s => ({
       name: s.name,
-      url: siteUrl(c.env.SERVE_BASE_URL, s.name),
+      url: siteUrl(c.env.SERVE_DOMAIN, s.name),
       slug_type: s.slug_type,
       status: s.status,
       deployed_at: s.deployed_at ? new Date(s.deployed_at).toISOString() : null,
@@ -135,7 +146,7 @@ router.get('/:name', async c => {
 
   return c.json({
     name: site.name,
-    url: siteUrl(c.env.SERVE_BASE_URL, site.name),
+    url: siteUrl(c.env.SERVE_DOMAIN, site.name),
     slug_type: site.slug_type,
     status: site.status,
     created_at: new Date(site.created_at).toISOString(),
@@ -161,18 +172,29 @@ router.put('/:name', async c => {
   const { userId, plan } = c.get('auth');
   const name = c.req.param('name');
   const site = await getSiteForUser(c.env, userId, name);
-  if (!site || site.status !== 'active') {
+  if (!site) {
+    return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
+  }
+  if (site.status === 'suspended') {
+    return c.json({ error: { code: 'SITE_SUSPENDED', message: 'This site is suspended. Upgrade your plan to resume deploys.' } }, 402);
+  }
+  if (site.status !== 'active') {
     return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
   }
 
-  // Monthly deploy limit check
+  // Monthly deploy limit is per-user across all sites, not per-site.
+  // Excludes failed deploys — only attempts that consumed quota count.
   const monthStart = new Date();
   monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
   const monthDeployCount = await c.env.DB
-    .prepare('SELECT COUNT(*) as n FROM deploys WHERE site_id = ? AND deployed_at >= ?')
-    .bind(site.id, monthStart.getTime())
+    .prepare(
+      `SELECT COUNT(*) as n FROM deploys d
+       JOIN sites s ON d.site_id = s.id
+       WHERE s.user_id = ? AND d.deployed_at >= ? AND d.status != 'failed'`
+    )
+    .bind(userId, monthStart.getTime())
     .first<{ n: number }>();
-  const monthLimit = LIMITS[plan].deploys_per_month;
+  const monthLimit = PLAN_LIMITS[plan].deploys_per_month;
   if (monthLimit !== null && (monthDeployCount?.n ?? 0) >= monthLimit) {
     return c.json({ error: { code: 'PLAN_LIMIT_REACHED', message: `Monthly deploy limit (${monthLimit}) reached.` } }, 402);
   }
@@ -181,10 +203,32 @@ router.put('/:name', async c => {
   const cacheTtl = Math.min(86400, Math.max(30, Number(cacheTtlHeader ?? '300'))) || 300;
 
   const contentType = c.req.header('Content-Type') ?? '';
+  const planSizeBytes = PLAN_LIMITS[plan].size_bytes;
+  const tooLarge = () => {
+    const mb = (planSizeBytes / (1024 * 1024)).toFixed(0);
+    return c.json({ error: { code: 'FILE_TOO_LARGE', message: `Total size exceeds ${mb}MB limit for ${plan} plan.` } }, 413);
+  };
+
+  // Reject obviously oversized requests before reading the body into memory.
+  // This covers raw HTML and multipart exactly, and ZIP by compressed size
+  // (a compressed file larger than the plan limit is always too big).
+  const contentLength = parseInt(c.req.header('Content-Length') ?? '', 10);
+  if (!isNaN(contentLength) && contentLength > planSizeBytes) {
+    return tooLarge();
+  }
+
   const files: { path: string; body: Uint8Array; contentType: string }[] = [];
 
   if (contentType.startsWith('application/zip') || contentType === 'application/octet-stream') {
     const bytes = new Uint8Array(await c.req.arrayBuffer());
+
+    // Guard against ZIP bombs by reading declared uncompressed sizes from the
+    // ZIP central directory before decompressing. Prevents OOM in unzipSync.
+    const declaredSize = getZipDeclaredUncompressedSize(bytes);
+    if (declaredSize > planSizeBytes) {
+      return tooLarge();
+    }
+
     let unzipped: Record<string, Uint8Array>;
     try {
       unzipped = unzipSync(bytes);
@@ -225,9 +269,8 @@ router.put('/:name', async c => {
   }
 
   const totalSize = files.reduce((acc, f) => acc + f.body.byteLength, 0);
-  if (totalSize > LIMITS[plan].size_bytes) {
-    const mb = (LIMITS[plan].size_bytes / (1024 * 1024)).toFixed(0);
-    return c.json({ error: { code: 'FILE_TOO_LARGE', message: `Total size exceeds ${mb}MB limit for ${plan} plan.` } }, 413);
+  if (totalSize > planSizeBytes) {
+    return tooLarge();
   }
 
   const now = Date.now();
@@ -266,8 +309,11 @@ router.put('/:name', async c => {
   await c.env.DB.batch(flipStatements);
 
   await c.env.QUEUE.send({ type: 'post_deploy_cache_purge', site_name: name });
+  if (site.active_deploy_id) {
+    await c.env.QUEUE.send({ type: 'deploy_cleanup', site_id: site.id, deploy_id: site.active_deploy_id });
+  }
 
-  const url = siteUrl(c.env.SERVE_BASE_URL, name);
+  const url = siteUrl(c.env.SERVE_DOMAIN, name);
   return c.json({ url, deploy_id: deployId, deployed_at: new Date(now).toISOString(), size_bytes: totalSize, file_count: files.length, sha256: deployHash });
 });
 
@@ -307,8 +353,8 @@ router.put('/:name/access', async c => {
     return c.json({ error: { code: 'INVALID_BODY', message: 'Password must be 8-128 characters.' } }, 400);
   }
 
-  let { password, session_ttl_hrs } = parsed.data;
-  if (plan === 'free') session_ttl_hrs = 24; // Fixed on free tier
+  const { password } = parsed.data;
+  const session_ttl_hrs = Math.min(parsed.data.session_ttl_hrs, PLAN_LIMITS[plan].session_ttl_hrs);
 
   const hash = await hashPassword(password);
 
@@ -352,8 +398,8 @@ router.post('/:name/access/revoke', async c => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function siteUrl(serveBase: string, name: string): string {
-  return `${serveBase}/${name}`;
+function siteUrl(domain: string, name: string): string {
+  return `https://${name}.${domain}`;
 }
 
 async function getSiteForUser(env: Env, userId: string, name: string): Promise<Site | null> {
@@ -441,6 +487,49 @@ function inferContentType(path: string): string {
     wasm: 'application/wasm',
   };
   return types[ext ?? ''] ?? 'application/octet-stream';
+}
+
+// Reads declared uncompressed sizes from the ZIP central directory without
+// decompressing. Returns the total, or Infinity if the file is unparseable.
+// This catches ZIP bombs before unzipSync ever runs.
+function getZipDeclaredUncompressedSize(bytes: Uint8Array): number {
+  if (bytes.length < 22) return Infinity;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  // Locate End of Central Directory record (signature 0x06054b50, little-endian).
+  // It sits at most 65558 bytes from the end (max comment length + fixed size).
+  let eocdOffset = -1;
+  const searchStart = Math.max(0, bytes.length - 65558);
+  for (let i = bytes.length - 22; i >= searchStart; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) {
+      eocdOffset = i;
+      break;
+    }
+  }
+  if (eocdOffset === -1) return Infinity;
+
+  const cdOffset = view.getUint32(eocdOffset + 16, true);
+  const cdSize   = view.getUint32(eocdOffset + 12, true);
+  if (cdOffset + cdSize > bytes.length) return Infinity;
+
+  let total = 0;
+  let pos = cdOffset;
+  const end = cdOffset + cdSize;
+
+  while (pos + 46 <= end) {
+    if (view.getUint32(pos, true) !== 0x02014b50) break; // central directory entry signature
+    const uncompressedSize = view.getUint32(pos + 24, true);
+    // 0xFFFFFFFF signals ZIP64 — treat as unknown and let post-extraction check handle it
+    if (uncompressedSize === 0xFFFFFFFF) return Infinity;
+    total += uncompressedSize;
+    if (total > 200 * 1024 * 1024) return total; // early-exit past any reasonable plan limit
+    const fileNameLen = view.getUint16(pos + 28, true);
+    const extraLen   = view.getUint16(pos + 30, true);
+    const commentLen = view.getUint16(pos + 32, true);
+    pos += 46 + fileNameLen + extraLen + commentLen;
+  }
+
+  return total;
 }
 
 export default router;

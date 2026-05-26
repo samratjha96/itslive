@@ -1,3 +1,5 @@
+import type { QueueMessage } from 'itslive-shared';
+
 interface Env {
   DB: D1Database;
   KV: KVNamespace;
@@ -5,14 +7,11 @@ interface Env {
   RESEND_API_KEY: string;
 }
 
-type QueueMessage =
-  | { type: 'otp_email'; email: string; code: string }
-  | { type: 'welcome_email'; email: string }
-  | { type: 'existing_account_notice'; email: string }
-  | { type: 'post_deploy_cache_purge'; site_name: string }
-  | { type: 'site_delete_cleanup'; site_id: string; user_id: string; site_name: string };
-
 export default {
+  async scheduled(_ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runAntiEntropy(env));
+  },
+
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
     for (const msg of batch.messages) {
       const body = msg.body as QueueMessage;
@@ -33,6 +32,9 @@ export default {
           case 'site_delete_cleanup':
             await deleteSiteFiles(env, body.user_id, body.site_name);
             break;
+          case 'deploy_cleanup':
+            await deleteDeployFiles(env, body.site_id, body.deploy_id);
+            break;
           default:
             // Unknown type — dead-letter, never execute
             console.error('Unknown queue message type:', (body as { type: string }).type);
@@ -48,7 +50,70 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-// ── R2 site cleanup ───────────────────────────────────────────────────────────
+// ── Anti-entropy cron ─────────────────────────────────────────────────────────
+
+async function runAntiEntropy(env: Env): Promise<void> {
+  await Promise.allSettled([
+    expireCoolingSites(env),
+    cleanupSupersededDeploys(env),
+    expireStuckDeploys(env),
+  ]);
+}
+
+// Flip sites that have passed their cooling window to 'deleted'.
+async function expireCoolingSites(env: Env): Promise<void> {
+  const now = Date.now();
+  const result = await env.DB
+    .prepare("UPDATE sites SET status = 'deleted' WHERE status = 'deleted_cooling' AND cooling_until <= ?")
+    .bind(now)
+    .run();
+  if (result.meta.changes > 0) {
+    console.log(`[anti-entropy] expired ${result.meta.changes} cooling site(s)`);
+  }
+}
+
+// Delete R2 objects for superseded deploys whose cleanup was queued but never
+// executed (e.g. queue message lost), then null out object_prefix so we don't
+// re-process them. Works in a single page; re-runs tomorrow catch any remainder.
+async function cleanupSupersededDeploys(env: Env): Promise<void> {
+  const rows = await env.DB
+    .prepare("SELECT id, site_id, object_prefix FROM deploys WHERE status = 'superseded' AND object_prefix IS NOT NULL LIMIT 50")
+    .all<{ id: string; site_id: string; object_prefix: string }>();
+
+  if (!rows.results?.length) return;
+
+  let cleaned = 0;
+  for (const deploy of rows.results) {
+    try {
+      await deleteR2Prefix(env, deploy.object_prefix + '/');
+      await env.DB
+        .prepare('UPDATE deploys SET object_prefix = NULL WHERE id = ? AND site_id = ?')
+        .bind(deploy.id, deploy.site_id)
+        .run();
+      cleaned++;
+    } catch (err) {
+      console.error(`[anti-entropy] failed to clean deploy ${deploy.id}:`, err);
+    }
+  }
+
+  if (cleaned > 0) {
+    console.log(`[anti-entropy] cleaned R2 for ${cleaned} superseded deploy(s)`);
+  }
+}
+
+// Mark deploys that got stuck in 'uploading' for over an hour as failed.
+async function expireStuckDeploys(env: Env): Promise<void> {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  const result = await env.DB
+    .prepare("UPDATE deploys SET status = 'failed' WHERE status = 'uploading' AND deployed_at <= ?")
+    .bind(cutoff)
+    .run();
+  if (result.meta.changes > 0) {
+    console.log(`[anti-entropy] expired ${result.meta.changes} stuck deploy(s)`);
+  }
+}
+
+// ── R2 cleanup ────────────────────────────────────────────────────────────────
 
 async function deleteSiteFiles(env: Env, userId: string, siteName: string): Promise<void> {
   if (!userId || !siteName) {
@@ -81,9 +146,43 @@ async function deleteSiteFiles(env: Env, userId: string, siteName: string): Prom
   }
 }
 
+async function deleteDeployFiles(env: Env, siteId: string, deployId: string): Promise<void> {
+  if (!siteId || !deployId) {
+    throw new Error(`Cannot delete deploy files: siteId=${siteId} deployId=${deployId}`);
+  }
+
+  const deploy = await env.DB
+    .prepare('SELECT object_prefix FROM deploys WHERE id = ? AND site_id = ?')
+    .bind(deployId, siteId)
+    .first<{ object_prefix: string | null }>();
+
+  if (!deploy?.object_prefix) {
+    console.warn(`deploy_cleanup: no object_prefix for deploy ${deployId} on site ${siteId}`);
+    return;
+  }
+
+  await deleteR2Prefix(env, deploy.object_prefix + '/');
+
+  await env.DB
+    .prepare('UPDATE deploys SET object_prefix = NULL WHERE id = ? AND site_id = ?')
+    .bind(deployId, siteId)
+    .run();
+}
+
+async function deleteR2Prefix(env: Env, prefix: string): Promise<void> {
+  let cursor: string | undefined;
+  do {
+    const list = await env.SITES.list({ prefix, limit: 1000, cursor });
+    if (list.objects.length > 0) {
+      await env.SITES.delete(list.objects.map(o => o.key));
+    }
+    cursor = list.truncated ? list.cursor : undefined;
+  } while (cursor);
+}
+
 // ── Resend email ──────────────────────────────────────────────────────────────
 
-const FROM = 'ItsLive <noreply@itslive.dev>';
+const FROM = 'ItsLive <noreply@mail.itslive.fyi>';
 const RESEND_API = 'https://api.resend.com/emails';
 
 async function sendEmail(env: Env, to: string, subject: string, html: string): Promise<void> {

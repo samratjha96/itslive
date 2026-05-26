@@ -6,6 +6,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
+  "dependencies": {
+    "itslive-shared": "workspace:*"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250525.0",
     "typescript": "^5.7.0",

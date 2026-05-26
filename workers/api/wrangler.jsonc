@@ -37,9 +37,15 @@
 
   "vars": {
     "ENVIRONMENT": "production",
-    // Update SERVE_BASE_URL after first deploy of itslive-serve
-    "SERVE_BASE_URL": "https://itslive-serve.zasamrat.workers.dev"
-  }
+    "SERVE_DOMAIN": "itslive.fyi"
+  },
+
+  "routes": [
+    {
+      "pattern": "api.itslive.fyi",
+      "custom_domain": true
+    }
+  ]
 
   // Secrets — set via: npx wrangler secret put RESEND_API_KEY
 }

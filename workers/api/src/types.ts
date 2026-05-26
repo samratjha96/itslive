@@ -4,7 +4,7 @@ export interface Env {
   SITES: R2Bucket;
   QUEUE: Queue;
   RESEND_API_KEY: string;
-  SERVE_BASE_URL: string;
+  SERVE_DOMAIN: string;
   ENVIRONMENT: string;
   ALLOW_DEV_CODES?: string;
 }
@@ -34,7 +34,7 @@ export interface Site {
   name: string;
   slug_type: 'auto' | 'custom';
   type: 'static' | 'dynamic';
-  status: 'active' | 'deleted' | 'deleted_cooling';
+  status: 'active' | 'suspended' | 'deleted' | 'deleted_cooling';
   cooling_until: number | null;
   created_at: number;
   deployed_at: number | null;
@@ -64,18 +64,12 @@ export interface AuthContext {
   keyId: string;
 }
 
-// Cloudflare Queue message types — closed union, no unknown types executed
-export type QueueMessage =
-  | { type: 'otp_email'; email: string; code: string }
-  | { type: 'welcome_email'; email: string }
-  | { type: 'existing_account_notice'; email: string }
-  | { type: 'post_deploy_cache_purge'; site_name: string }
-  | { type: 'site_delete_cleanup'; site_id: string; user_id: string; site_name: string };
+export type { QueueMessage } from 'itslive-shared';
 
 export const PLAN_LIMITS = {
-  free:    { sites: 3,   size_bytes: 5 * 1024 * 1024,   deploys_per_month: 50,   api_calls_per_hour: 100 },
-  builder: { sites: 25,  size_bytes: 25 * 1024 * 1024,  deploys_per_month: 500,  api_calls_per_hour: 1000 },
-  studio:  { sites: 200, size_bytes: 100 * 1024 * 1024, deploys_per_month: null, api_calls_per_hour: 10000 },
+  free:    { sites: 3,   size_bytes: 5   * 1024 * 1024, deploys_per_month: 50,   api_calls_per_hour: 100,   session_ttl_hrs: 24  },
+  builder: { sites: 25,  size_bytes: 25  * 1024 * 1024, deploys_per_month: 500,  api_calls_per_hour: 1000,  session_ttl_hrs: 168 },
+  studio:  { sites: 200, size_bytes: 100 * 1024 * 1024, deploys_per_month: null, api_calls_per_hour: 10000, session_ttl_hrs: 720 },
 } as const;
 
 export type Plan = keyof typeof PLAN_LIMITS;

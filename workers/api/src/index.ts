@@ -16,8 +16,8 @@ app.use('*', cors({
 app.get('/', c => c.json({ name: 'ItsLive API', version: '1.0.0', status: 'ok' }));
 
 app.get('/llms.txt', c => {
-  const base = 'https://itslive-api.zasamrat.workers.dev';
-  const serveBase = 'https://itslive-serve.zasamrat.workers.dev';
+  const base = 'https://api.itslive.fyi';
+  const serveBase = 'https://itslive.fyi';
   return c.text(`# ItsLive API — Agent Instructions
 
 Deploy websites to the public internet with a few API calls.
@@ -74,7 +74,7 @@ STEP 2 — DEPLOY A SITE
     POST /sites
     X-API-Key: il_live_...
     {}
-    → 201 {"name": "violet-crane-42", "url": "${serveBase}/violet-crane-42",
+    → 201 {"name": "violet-crane-42", "url": "https://violet-crane-42.itslive.fyi",
            "site_id": "...", "slug_type": "auto", "created_at": "..."}
 
     Use the "name" from this response in step 2b.
@@ -189,7 +189,7 @@ Test environment keys use the prefix il_test_ and behave identically.
 SITE SERVING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Sites live at: ${serveBase}/{name}
+Sites live at: https://{name}.itslive.fyi
 SPA routing: missing paths fall back to index.html automatically
 Cache TTL: 300s default · override with X-Cache-TTL header on PUT /sites/{name} (30–86400s)
 Site names are permanent — no rename after creation
