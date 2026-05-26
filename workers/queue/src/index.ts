@@ -55,6 +55,7 @@ export default {
 async function runAntiEntropy(env: Env): Promise<void> {
   await Promise.allSettled([
     expireCoolingSites(env),
+    reapDeactivatedSites(env),
     cleanupSupersededDeploys(env),
     expireStuckDeploys(env),
   ]);
@@ -69,6 +70,37 @@ async function expireCoolingSites(env: Env): Promise<void> {
     .run();
   if (result.meta.changes > 0) {
     console.log(`[anti-entropy] expired ${result.meta.changes} cooling site(s)`);
+  }
+}
+
+// Purge R2 files for deactivated sites whose 7-day restore window has passed,
+// then transition them into the 30-day name-squatting cooling window.
+async function reapDeactivatedSites(env: Env): Promise<void> {
+  const now = Date.now();
+  const rows = await env.DB
+    .prepare("SELECT id, user_id, name FROM sites WHERE status = 'deactivated' AND cooling_until <= ? LIMIT 50")
+    .bind(now)
+    .all<{ id: string; user_id: string; name: string }>();
+
+  if (!rows.results?.length) return;
+
+  const coolingUntil = now + 30 * 24 * 60 * 60 * 1000;
+  let reaped = 0;
+  for (const site of rows.results) {
+    try {
+      await deleteSiteFiles(env, site.user_id, site.name);
+      await env.DB
+        .prepare("UPDATE sites SET status = 'deleted_cooling', cooling_until = ? WHERE id = ? AND status = 'deactivated'")
+        .bind(coolingUntil, site.id)
+        .run();
+      reaped++;
+    } catch (err) {
+      console.error(`[anti-entropy] failed to reap deactivated site ${site.id}:`, err);
+    }
+  }
+
+  if (reaped > 0) {
+    console.log(`[anti-entropy] reaped ${reaped} deactivated site(s) into cooling`);
   }
 }
 
@@ -141,7 +173,7 @@ async function deleteSiteFiles(env: Env, userId: string, siteName: string): Prom
     .bind(userId, siteName)
     .first<{ status: string }>();
 
-  if (site && site.status !== 'deleted_cooling' && site.status !== 'deleted') {
+  if (site && site.status !== 'deleted_cooling' && site.status !== 'deleted' && site.status !== 'deactivated') {
     console.warn(`Unexpected site status after delete cleanup: ${site.status}`);
   }
 }

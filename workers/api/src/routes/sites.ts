@@ -113,7 +113,7 @@ router.post('/', async c => {
 router.get('/', async c => {
   const { userId } = c.get('auth');
   const sites = await c.env.DB
-    .prepare("SELECT id, name, slug_type, type, status, deployed_at, password_hash FROM sites WHERE user_id = ? AND status IN ('active', 'suspended') ORDER BY created_at DESC")
+    .prepare("SELECT id, name, slug_type, type, status, deployed_at, password_hash FROM sites WHERE user_id = ? AND status IN ('active', 'suspended', 'deactivated') ORDER BY created_at DESC")
     .bind(userId)
     .all<Site>();
 
@@ -164,6 +164,31 @@ router.get('/:name', async c => {
       status: d.status,
     })),
   });
+});
+
+// ── POST /sites/:name/restore ─────────────────────────────────────────────────
+
+router.post('/:name/restore', async c => {
+  const { userId } = c.get('auth');
+  const name = c.req.param('name');
+
+  const site = await c.env.DB
+    .prepare("SELECT * FROM sites WHERE name = ? AND user_id = ? AND status = 'deactivated'")
+    .bind(name, userId)
+    .first<Site>();
+
+  if (!site) {
+    return c.json({ error: { code: 'SITE_NOT_RESTORABLE', message: 'Site not found, already purged, or not in a deactivated state.' } }, 404);
+  }
+
+  await c.env.DB
+    .prepare("UPDATE sites SET status = 'active', cooling_until = NULL WHERE id = ?")
+    .bind(site.id)
+    .run();
+
+  await c.env.KV.delete(`site:${name}`);
+
+  return c.json({ restored: true, url: siteUrl(c.env.SERVE_DOMAIN, name) });
 });
 
 // ── PUT /sites/:name ──────────────────────────────────────────────────────────
@@ -324,17 +349,21 @@ router.delete('/:name', async c => {
   const name = c.req.param('name');
   const site = await getSiteForUser(c.env, userId, name);
   if (!site) return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
+  if (site.status === 'deactivated') {
+    return c.json({ error: { code: 'ALREADY_DEACTIVATED', message: 'Site is already deactivated. Use POST /sites/:name/restore to bring it back.' } }, 409);
+  }
 
-  const coolingUntil = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  // Soft delete: site is invisible immediately but R2 files are preserved for
+  // 7 days so the owner can restore. The anti-entropy cron handles cleanup.
+  const reapAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
   await c.env.DB
-    .prepare("UPDATE sites SET status = 'deleted_cooling', cooling_until = ? WHERE id = ?")
-    .bind(coolingUntil, site.id)
+    .prepare("UPDATE sites SET status = 'deactivated', cooling_until = ? WHERE id = ?")
+    .bind(reapAt, site.id)
     .run();
 
   await c.env.KV.delete(`site:${name}`);
-  await c.env.QUEUE.send({ type: 'site_delete_cleanup', site_id: site.id, user_id: userId, site_name: name });
 
-  return c.json({ deleted: true, cooling_until: new Date(coolingUntil).toISOString() });
+  return c.json({ deactivated: true, restorable_until: new Date(reapAt).toISOString() });
 });
 
 // ── PUT /sites/:name/access ───────────────────────────────────────────────────

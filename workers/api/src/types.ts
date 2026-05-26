@@ -34,7 +34,7 @@ export interface Site {
   name: string;
   slug_type: 'auto' | 'custom';
   type: 'static' | 'dynamic';
-  status: 'active' | 'suspended' | 'deleted' | 'deleted_cooling';
+  status: 'active' | 'suspended' | 'deleted' | 'deleted_cooling' | 'deactivated';
   cooling_until: number | null;
   created_at: number;
   deployed_at: number | null;
