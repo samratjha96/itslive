@@ -404,7 +404,7 @@ router.delete('/:name/access', async c => {
   const { userId } = c.get('auth');
   const name = c.req.param('name');
   const site = await getSiteForUser(c.env, userId, name);
-  if (!site) return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
+  if (!site || site.status === 'deactivated') return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
 
   await c.env.DB.prepare('UPDATE sites SET password_hash = NULL WHERE id = ?').bind(site.id).run();
   await revokeAllSessions(c.env, site.id);
@@ -419,7 +419,7 @@ router.post('/:name/access/revoke', async c => {
   const { userId } = c.get('auth');
   const name = c.req.param('name');
   const site = await getSiteForUser(c.env, userId, name);
-  if (!site) return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
+  if (!site || site.status === 'deactivated') return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
 
   const count = await revokeAllSessions(c.env, site.id);
   return c.json({ sessions_revoked: count });

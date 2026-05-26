@@ -73,7 +73,7 @@ export default {
       return gone(siteName);
     }
 
-    if (site.status === 'deactivated' || site.status !== 'active') {
+    if (site.status !== 'active') {
       return notFound(siteName);
     }
 

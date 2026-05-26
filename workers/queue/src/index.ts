@@ -173,6 +173,8 @@ async function deleteSiteFiles(env: Env, userId: string, siteName: string): Prom
     .bind(userId, siteName)
     .first<{ status: string }>();
 
+  // 'deactivated' is expected when called from reapDeactivatedSites — the status
+  // flip to 'deleted_cooling' happens after this function returns.
   if (site && site.status !== 'deleted_cooling' && site.status !== 'deleted' && site.status !== 'deactivated') {
     console.warn(`Unexpected site status after delete cleanup: ${site.status}`);
   }
