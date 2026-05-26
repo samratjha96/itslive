@@ -8,9 +8,9 @@
     "dev:api": "pnpm --filter itslive-api dev",
     "dev:serve": "pnpm --filter itslive-serve dev",
     "db:migrate": "pnpm --filter itslive-api exec wrangler d1 migrations apply itslive-prod --remote",
-    "deploy:api": "pnpm --filter itslive-api deploy",
-    "deploy:serve": "pnpm --filter itslive-serve deploy",
-    "deploy:queue": "pnpm --filter itslive-queue deploy",
+    "deploy:api": "pnpm --filter itslive-api run deploy",
+    "deploy:serve": "pnpm --filter itslive-serve run deploy",
+    "deploy:queue": "pnpm --filter itslive-queue run deploy",
     "deploy:all": "pnpm db:migrate && pnpm deploy:api && pnpm deploy:serve && pnpm deploy:queue"
   }
 }
