@@ -40,12 +40,24 @@ export default {
     const url = new URL(request.url);
     const host = request.headers.get('Host') ?? url.hostname;
 
-    // Apex domain or unrecognised host — serve landing page from R2
+    // Apex domain or unrecognised host — serve landing page assets from R2
     if (host === SERVE_DOMAIN || !host.endsWith('.' + SERVE_DOMAIN)) {
-      const landing = await env.SITES.get('_landing/index.html');
-      if (landing && 'body' in landing) {
-        return new Response(landing.body, {
-          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+      const LANDING_ASSETS: Record<string, string> = {
+        'favicon.svg':   'image/svg+xml',
+        'og-image.png':  'image/png',
+        'robots.txt':    'text/plain',
+        'sitemap.xml':   'application/xml',
+      };
+      const requestedPath = url.pathname.slice(1); // strip leading /
+      const contentType = LANDING_ASSETS[requestedPath];
+      const key = contentType ? `_landing/${requestedPath}` : '_landing/index.html';
+      const object = await env.SITES.get(key);
+      if (object && 'body' in object) {
+        return new Response(object.body, {
+          headers: {
+            'Content-Type': contentType ?? 'text/html; charset=utf-8',
+            'Cache-Control': 'public, max-age=300',
+          },
         });
       }
       return new Response('ItsLive', { headers: { 'Content-Type': 'text/plain' } });
