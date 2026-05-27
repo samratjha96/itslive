@@ -11,6 +11,7 @@
     "deploy:api": "pnpm --filter itslive-api run deploy",
     "deploy:serve": "pnpm --filter itslive-serve run deploy",
     "deploy:queue": "pnpm --filter itslive-queue run deploy",
-    "deploy:all": "pnpm db:migrate && pnpm deploy:api && pnpm deploy:serve && pnpm deploy:queue"
+    "deploy:all": "pnpm db:migrate && pnpm deploy:api && pnpm deploy:serve && pnpm deploy:queue",
+    "typecheck": "pnpm --filter itslive-api --filter itslive-serve --filter itslive-queue exec tsc --noEmit"
   }
 }

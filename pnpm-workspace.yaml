@@ -1,2 +1,4 @@
 packages:
   - 'workers/*'
+
+minimumReleaseAge: '3 days'
