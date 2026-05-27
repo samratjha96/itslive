@@ -1,6 +1,9 @@
 import type { Env } from '../types';
-import { PLAN_LIMITS } from '../types';
+import { PLAN_LIMITS } from './limits';
 import { invalidateUserKeyCache } from '../middleware/auth';
+import { suspendSites, unsuspendSites as applyUnsuspend } from './siteStatus';
+
+export type { Plan } from './limits';
 
 // Called by the Stripe webhook handler when a subscription is downgraded or
 // cancelled. Suspends the newest sites that exceed the new plan's site limit.
@@ -14,14 +17,7 @@ export async function suspendExcessSites(env: Env, userId: string, plan: keyof t
     .all<{ id: string; name: string }>();
 
   const toSuspend = (sites.results ?? []).slice(limit);
-  if (toSuspend.length === 0) return;
-
-  await env.DB.batch(
-    toSuspend.map(s => env.DB.prepare("UPDATE sites SET status = 'suspended' WHERE id = ?").bind(s.id))
-  );
-
-  // Bust serve-worker KV cache for each suspended site
-  await Promise.all(toSuspend.map(s => env.KV.delete(`site:${s.name}`)));
+  await suspendSites(env, toSuspend);
 }
 
 // Called by the Stripe webhook handler when a subscription is upgraded or
@@ -32,13 +28,7 @@ export async function unsuspendSites(env: Env, userId: string): Promise<void> {
     .bind(userId)
     .all<{ id: string; name: string }>();
 
-  if ((suspended.results ?? []).length === 0) return;
-
-  await env.DB.batch(
-    suspended.results.map(s => env.DB.prepare("UPDATE sites SET status = 'active' WHERE id = ?").bind(s.id))
-  );
-
-  await Promise.all(suspended.results.map(s => env.KV.delete(`site:${s.name}`)));
+  await applyUnsuspend(env, suspended.results ?? []);
 }
 
 // Purges serve-worker KV caches for all sites owned by a user. Called on plan

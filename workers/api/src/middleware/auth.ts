@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { sha256 } from '../lib/crypto';
 import type { Env, AuthContext } from '../types';
-import { PLAN_LIMITS } from '../types';
+import { PLAN_LIMITS } from '../lib/limits';
 
 declare module 'hono' {
   interface ContextVariableMap {

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth';
-import { PLAN_LIMITS } from '../types';
+import { PLAN_LIMITS } from '../lib/limits';
 import type { Env } from '../types';
 
 const router = new Hono<{ Bindings: Env }>();

@@ -1,4 +1,5 @@
 import type { QueueMessage } from 'itslive-shared';
+import { sendOtp, sendWelcome, sendExistingAccountNotice } from './email';
 
 interface Env {
   DB: D1Database;
@@ -18,13 +19,13 @@ export default {
       try {
         switch (body.type) {
           case 'otp_email':
-            await sendOtp(env, body.email, body.code);
+            await sendOtp(env.RESEND_API_KEY, body.email, body.code);
             break;
           case 'welcome_email':
-            await sendWelcome(env, body.email);
+            await sendWelcome(env.RESEND_API_KEY, body.email);
             break;
           case 'existing_account_notice':
-            await sendExistingAccountNotice(env, body.email);
+            await sendExistingAccountNotice(env.RESEND_API_KEY, body.email);
             break;
           case 'post_deploy_cache_purge':
             await env.KV.delete(`site:${body.site_name}`);
@@ -36,9 +37,9 @@ export default {
             await deleteDeployFiles(env, body.site_id, body.deploy_id);
             break;
           default:
-            // Unknown type — dead-letter, never execute
-            console.error('Unknown queue message type:', (body as { type: string }).type);
-            msg.retry();
+            // Unknown type — schema mismatch, retrying will never help
+            console.error('Unknown queue message type, dropping:', (body as { type: string }).type);
+            msg.ack();
             continue;
         }
         msg.ack();
@@ -214,51 +215,3 @@ async function deleteR2Prefix(env: Env, prefix: string): Promise<void> {
   } while (cursor);
 }
 
-// ── Resend email ──────────────────────────────────────────────────────────────
-
-const FROM = 'ItsLive <noreply@mail.itslive.fyi>';
-const RESEND_API = 'https://api.resend.com/emails';
-
-async function sendEmail(env: Env, to: string, subject: string, html: string): Promise<void> {
-  const resp = await fetch(RESEND_API, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ from: FROM, to, subject, html }),
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Resend ${resp.status}: ${text}`);
-  }
-}
-
-async function sendOtp(env: Env, email: string, code: string): Promise<void> {
-  await sendEmail(env, email, 'Your ItsLive verification code', `
-    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px">
-      <h1 style="font-size:24px;font-weight:700;margin-bottom:8px">Verify your email</h1>
-      <p style="color:#666;margin-bottom:32px">Enter this code to complete your ItsLive sign-up:</p>
-      <div style="background:#f4f4f5;border-radius:12px;padding:24px;text-align:center;margin-bottom:32px">
-        <span style="font-size:40px;font-weight:700;letter-spacing:8px;font-family:monospace">${code}</span>
-      </div>
-      <p style="color:#999;font-size:14px">Expires in 10 minutes. One use only.</p>
-    </div>`);
-}
-
-async function sendWelcome(env: Env, email: string): Promise<void> {
-  await sendEmail(env, email, 'Welcome to ItsLive', `
-    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px">
-      <h1 style="font-size:24px;font-weight:700;margin-bottom:8px">You're live.</h1>
-      <p style="color:#666">Your API key has been issued. Deploy your first site in seconds.</p>
-    </div>`);
-}
-
-async function sendExistingAccountNotice(env: Env, email: string): Promise<void> {
-  await sendEmail(env, email, 'ItsLive account activity', `
-    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px">
-      <h1 style="font-size:24px;font-weight:700;margin-bottom:8px">Sign-up attempt notice</h1>
-      <p style="color:#666">Someone tried to create an ItsLive account with your email.</p>
-      <p style="color:#666;margin-top:16px">If this was you, check for a separate verification code. If not, no action needed.</p>
-    </div>`);
-}

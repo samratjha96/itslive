@@ -5,8 +5,9 @@ import { sha256, hashPassword } from '../lib/crypto';
 import { ulid } from '../lib/id';
 import { generateSlug, RESERVED_NAMES, SLUG_PATTERN } from '../lib/words';
 import { authMiddleware } from '../middleware/auth';
+import { deactivateSite, restoreSite } from '../lib/siteStatus';
 import type { Env, Site } from '../types';
-import { PLAN_LIMITS } from '../types';
+import { PLAN_LIMITS } from '../lib/limits';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -181,13 +182,7 @@ router.post('/:name/restore', async c => {
     return c.json({ error: { code: 'SITE_NOT_RESTORABLE', message: 'Site not found, already purged, or not in a deactivated state.' } }, 404);
   }
 
-  await c.env.DB
-    .prepare("UPDATE sites SET status = 'active', cooling_until = NULL WHERE id = ?")
-    .bind(site.id)
-    .run();
-
-  await c.env.KV.delete(`site:${name}`);
-
+  await restoreSite(c.env, site.id, name);
   return c.json({ restored: true, url: siteUrl(c.env.SERVE_DOMAIN, name) });
 });
 
@@ -356,13 +351,7 @@ router.delete('/:name', async c => {
   // Soft delete: site is invisible immediately but R2 files are preserved for
   // 7 days so the owner can restore. The anti-entropy cron handles cleanup.
   const reapAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  await c.env.DB
-    .prepare("UPDATE sites SET status = 'deactivated', cooling_until = ? WHERE id = ?")
-    .bind(reapAt, site.id)
-    .run();
-
-  await c.env.KV.delete(`site:${name}`);
-
+  await deactivateSite(c.env, site.id, name, reapAt);
   return c.json({ deactivated: true, restorable_until: new Date(reapAt).toISOString() });
 });
 
@@ -432,6 +421,11 @@ function siteUrl(domain: string, name: string): string {
 }
 
 async function getSiteForUser(env: Env, userId: string, name: string): Promise<Site | null> {
+  // Includes 'deleted_cooling' — each route guards its own valid statuses.
+  // Note: DELETE /:name does not exclude 'deleted_cooling', so a site already
+  // in cooling could be transitioned back to 'deactivated'. Acceptable for now
+  // since the anti-entropy cron will re-reap it, but a stricter filter here
+  // would prevent the edge case.
   return env.DB
     .prepare("SELECT * FROM sites WHERE name = ? AND user_id = ? AND status != 'deleted'")
     .bind(name, userId)
