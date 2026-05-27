@@ -6,3 +6,4 @@ dist/
 .dev.vars
 *.log
 .DS_Store
+.pnpm-store/
