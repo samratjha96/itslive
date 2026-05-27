@@ -55,6 +55,98 @@
   }
   </script>
 
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Can Claude deploy a website using ItsLive?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Tell Claude to read https://api.itslive.fyi/llms.txt — a plain-text file with agent-readable instructions. Claude handles signup, gets an API key in the response body, creates a site, and uploads your files. No browser required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does ItsLive work with ChatGPT, Codex, or Cursor?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Any tool that can make HTTP requests works — ChatGPT, OpenAI Codex, Cursor, GitHub Copilot, Gemini, or a script you wrote yourself. Paste the getting-started prompt from itslive.fyi into whichever tool you're using."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How fast is a deploy?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Under a second after upload. There's no build step, no deployment queue. Files land on a global CDN and serve immediately."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need a credit card to start?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. The free tier is 3 active sites, 5 MB each, 50 deploys a month — no card, no expiry."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What kind of sites can I host on ItsLive?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Static sites: HTML, CSS, JS, images. Single-page apps with client-side routing work out of the box. No server-side code or databases."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is ItsLive different from Netlify or Vercel?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Netlify and Vercel are built for developers at a dashboard. ItsLive is API-first: the key comes back in a JSON response, there's no OAuth redirect, and a deploy completes in one PUT request. An AI agent can go from zero to live URL with four API calls and no human intervention."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to deploy a website using an AI agent",
+    "description": "Deploy a static website using ItsLive's API. Works with Claude, ChatGPT, Codex, Cursor, GitHub Copilot, and any agent that can make HTTP requests.",
+    "step": [
+      {
+        "@type": "HowToStep",
+        "position": 1,
+        "name": "Request a verification code",
+        "text": "POST to https://api.itslive.fyi/signup with your email address. A 6-character code is sent to your inbox."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 2,
+        "name": "Exchange the code for an API key",
+        "text": "POST to https://api.itslive.fyi/verify with the code. An API key is returned directly in the response body."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 3,
+        "name": "Create a site",
+        "text": "POST to https://api.itslive.fyi/sites. A globally-unique URL is assigned instantly."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 4,
+        "name": "Upload your files",
+        "text": "PUT to https://api.itslive.fyi/sites/{name} with an HTML file or ZIP archive. The site goes live within a second."
+      }
+    ]
+  }
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -554,6 +646,41 @@
     .api-header a:hover { color: var(--accent); border-color: var(--accent); }
     .api-header a svg { width: 12px; height: 12px; }
 
+    /* WORKS WITH */
+    .works-with {
+      padding: 18px 48px;
+      border-bottom: 2px solid var(--border);
+      display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    }
+    .works-with-label {
+      font-family: var(--mono); font-size: 10px; font-weight: 600;
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+      flex-shrink: 0;
+    }
+    .works-with-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+    .works-with-tool {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+      padding: 4px 11px; background: var(--surface);
+      border: 1px solid rgba(17,16,8,.15);
+    }
+
+    /* FAQ */
+    .faq { border-bottom: 2px solid var(--border); padding: 88px 48px; }
+    .faq-inner { max-width: 860px; margin: 0 auto; }
+    .faq-label {
+      font-family: var(--mono); font-size: 10px; font-weight: 500;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 16px;
+    }
+    .faq-inner > h2 {
+      font-size: clamp(30px, 3.2vw, 48px); font-weight: 700;
+      letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 48px;
+    }
+    .faq-item { padding: 28px 0; border-top: 1px solid rgba(17,16,8,.14); }
+    .faq-item:last-child { border-bottom: 1px solid rgba(17,16,8,.14); }
+    .faq-q { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 10px; }
+    .faq-a { font-size: 15px; color: var(--muted); line-height: 1.7; max-width: 700px; }
+
     /* FOOTER */
     footer {
       border-top: 2px solid var(--border);
@@ -594,6 +721,8 @@
       .hero-sub { font-size: 15px; }
       .hero-left { padding: 40px 20px; }
       .hero-right { padding: 32px 20px; }
+      .works-with { padding: 16px 20px; }
+      .faq { padding: 48px 20px; }
     }
   </style>
 </head>
@@ -698,6 +827,21 @@
   <div class="stat-item">
     <div class="stat-number"><span class="accent">1</span></div>
     <div class="stat-label">Thing you actually do</div>
+  </div>
+</div>
+
+<!-- WORKS WITH -->
+<div class="works-with" aria-label="Compatible AI tools">
+  <span class="works-with-label">Works with</span>
+  <div class="works-with-tools">
+    <span class="works-with-tool">Claude</span>
+    <span class="works-with-tool">Claude Code</span>
+    <span class="works-with-tool">ChatGPT</span>
+    <span class="works-with-tool">Codex</span>
+    <span class="works-with-tool">Cursor</span>
+    <span class="works-with-tool">GitHub Copilot</span>
+    <span class="works-with-tool">Gemini</span>
+    <span class="works-with-tool">Any LLM</span>
   </div>
 </div>
 
@@ -953,6 +1097,38 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
       </svg>
     </a>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq" id="faq">
+  <div class="faq-inner">
+    <div class="faq-label">FAQ</div>
+    <h2>Common questions.</h2>
+    <div class="faq-item">
+      <div class="faq-q">Can Claude deploy a website using ItsLive?</div>
+      <p class="faq-a">Yes. Tell Claude to read <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">https://api.itslive.fyi/llms.txt</code> — a plain-text file with agent-readable instructions. Claude handles signup, gets an API key in the response body, creates a site, and uploads your files. No browser required.</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Does it work with ChatGPT, Codex, or Cursor?</div>
+      <p class="faq-a">Any tool that can make HTTP requests works — ChatGPT, OpenAI Codex, Cursor, GitHub Copilot, Gemini, or a script you wrote yourself. Paste the getting-started prompt from this page into whichever tool you're using.</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">How fast is a deploy?</div>
+      <p class="faq-a">Under a second after upload. No build step, no deployment queue. Files land on a global CDN and serve immediately.</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Do I need a credit card?</div>
+      <p class="faq-a">No. The free tier is 3 active sites, 5 MB each, 50 deploys a month — no card, no expiry.</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">What kind of sites can I host?</div>
+      <p class="faq-a">Static sites: HTML, CSS, JS, images. Single-page apps with client-side routing work out of the box. No server-side code or databases.</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">How is this different from Netlify or Vercel?</div>
+      <p class="faq-a">Netlify and Vercel are built for developers at a dashboard. ItsLive is API-first: the key comes back in a JSON response, there's no OAuth redirect, and a deploy completes in one PUT request. An AI agent can go from zero to live URL with four API calls and no human intervention.</p>
+    </div>
   </div>
 </section>
 
