@@ -107,6 +107,38 @@
           "@type": "Answer",
           "text": "Netlify and Vercel are built for developers at a dashboard. ItsLive is API-first: the key comes back in a JSON response, there's no OAuth redirect, and a deploy completes in one PUT request. An AI agent can go from zero to live URL with four API calls and no human intervention."
         }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I deploy an HTML dashboard?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Sign up, get an API key, then run one command: PUT /sites/{name} with your HTML file and Content-Type: text/html. You get a live URL back in the response. Signup to live URL takes under a minute."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I host an AI-generated website?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Upload the files directly via API. POST to /sites to create a slot, then PUT to /sites/{name} with your HTML file or a ZIP of the full site. If the AI agent that built the files also has API access, it can do the upload itself — no browser, no dashboard, no human step."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I make a local website public?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "One command: curl -X PUT https://api.itslive.fyi/sites/{name} -H 'X-API-Key: ...' -H 'Content-Type: text/html' --data-binary @index.html. Free tier covers 3 sites with no credit card required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I deploy a static site for free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Sign up at itslive.fyi — free tier is 3 active sites, 5 MB each, 50 deploys a month, no card required. Upload HTML, CSS, JS, and images as a ZIP or single file. Single-page apps with client-side routing work out of the box."
+        }
       }
     ]
   }
@@ -1128,6 +1160,22 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
     <div class="faq-item">
       <div class="faq-q">How is this different from Netlify or Vercel?</div>
       <p class="faq-a">Netlify and Vercel are built for developers at a dashboard. ItsLive is API-first: the key comes back in a JSON response, there's no OAuth redirect, and a deploy completes in one PUT request. An AI agent can go from zero to live URL with four API calls and no human intervention.</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">How do I deploy an HTML dashboard?</div>
+      <p class="faq-a">Sign up, get an API key, then run one command: <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">PUT /sites/{name}</code> with your HTML file and <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">Content-Type: text/html</code>. You get a live URL back in the response. Signup to live URL takes under a minute.</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">How do I host an AI-generated website?</div>
+      <p class="faq-a">Upload the files directly via API. POST to <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">/sites</code> to create a slot, then PUT to <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">/sites/{name}</code> with your HTML file or a ZIP of the full site. If the AI agent that built the files also has API access, it can do the upload itself — no browser, no dashboard, no human step.</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">How do I make a local website public?</div>
+      <p class="faq-a">One command: <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">curl -X PUT https://api.itslive.fyi/sites/{name} -H "X-API-Key: ..." -H "Content-Type: text/html" --data-binary @index.html</code>. Free tier covers 3 sites with no credit card required.</p>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">How do I deploy a static site for free?</div>
+      <p class="faq-a">Sign up at itslive.fyi — free tier is 3 active sites, 5 MB each, 50 deploys a month, no card required. Upload HTML, CSS, JS, and images as a ZIP or single file. Single-page apps with client-side routing work out of the box.</p>
     </div>
   </div>
 </section>
