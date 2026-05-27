@@ -62,18 +62,26 @@
     "mainEntity": [
       {
         "@type": "Question",
-        "name": "Can Claude deploy a website using ItsLive?",
+        "name": "Can I use ItsLive with Claude, ChatGPT, Codex, or Cursor?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Tell Claude to read https://api.itslive.fyi/llms.txt — a plain-text file with agent-readable instructions. Claude handles signup, gets an API key in the response body, creates a site, and uploads your files. No browser required."
+          "text": "Yes — any tool that can make HTTP requests works. Claude and Claude Code can follow the instructions at https://api.itslive.fyi/llms.txt autonomously. For ChatGPT, Codex, Cursor, GitHub Copilot, or Gemini, paste the getting-started prompt from itslive.fyi into whichever tool you're using."
         }
       },
       {
         "@type": "Question",
-        "name": "Does ItsLive work with ChatGPT, Codex, or Cursor?",
+        "name": "How do I deploy an HTML file or dashboard?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Any tool that can make HTTP requests works — ChatGPT, OpenAI Codex, Cursor, GitHub Copilot, Gemini, or a script you wrote yourself. Paste the getting-started prompt from itslive.fyi into whichever tool you're using."
+          "text": "Sign up, get an API key, then: PUT /sites/{name} with your HTML file and Content-Type: text/html. A live URL comes back in the response. Signup to live URL takes under a minute."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I host an AI-generated website?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "POST to /sites to create a slot, then PUT to /sites/{name} with your HTML file or a ZIP of the full site. If the AI that built the files has API access, it can do the upload itself — no browser, no dashboard, no human step required."
         }
       },
       {
@@ -81,20 +89,20 @@
         "name": "How fast is a deploy?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Under a second after upload. There's no build step, no deployment queue. Files land on a global CDN and serve immediately."
+          "text": "Under a second after upload. No build step, no deployment queue. Files land on a global CDN and serve immediately."
         }
       },
       {
         "@type": "Question",
-        "name": "Do I need a credit card to start?",
+        "name": "Is there a free tier?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. The free tier is 3 active sites, 5 MB each, 50 deploys a month — no card, no expiry."
+          "text": "Yes. Three active sites, 5 MB each, 50 deploys a month — no credit card, no expiry."
         }
       },
       {
         "@type": "Question",
-        "name": "What kind of sites can I host on ItsLive?",
+        "name": "What kind of sites can I host?",
         "acceptedAnswer": {
           "@type": "Answer",
           "text": "Static sites: HTML, CSS, JS, images. Single-page apps with client-side routing work out of the box. No server-side code or databases."
@@ -106,38 +114,6 @@
         "acceptedAnswer": {
           "@type": "Answer",
           "text": "Netlify and Vercel are built for developers at a dashboard. ItsLive is API-first: the key comes back in a JSON response, there's no OAuth redirect, and a deploy completes in one PUT request. An AI agent can go from zero to live URL with four API calls and no human intervention."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How do I deploy an HTML dashboard?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Sign up, get an API key, then run one command: PUT /sites/{name} with your HTML file and Content-Type: text/html. You get a live URL back in the response. Signup to live URL takes under a minute."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How do I host an AI-generated website?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Upload the files directly via API. POST to /sites to create a slot, then PUT to /sites/{name} with your HTML file or a ZIP of the full site. If the AI agent that built the files also has API access, it can do the upload itself — no browser, no dashboard, no human step."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How do I make a local website public?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "One command: curl -X PUT https://api.itslive.fyi/sites/{name} -H 'X-API-Key: ...' -H 'Content-Type: text/html' --data-binary @index.html. Free tier covers 3 sites with no credit card required."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How do I deploy a static site for free?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Sign up at itslive.fyi — free tier is 3 active sites, 5 MB each, 50 deploys a month, no card required. Upload HTML, CSS, JS, and images as a ZIP or single file. Single-page apps with client-side routing work out of the box."
         }
       }
     ]
@@ -708,10 +684,23 @@
       font-size: clamp(30px, 3.2vw, 48px); font-weight: 700;
       letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 48px;
     }
-    .faq-item { padding: 28px 0; border-top: 1px solid rgba(17,16,8,.14); }
+    .faq-item { border-top: 1px solid rgba(17,16,8,.14); }
     .faq-item:last-child { border-bottom: 1px solid rgba(17,16,8,.14); }
-    .faq-q { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 10px; }
-    .faq-a { font-size: 15px; color: var(--muted); line-height: 1.7; max-width: 700px; }
+    .faq-q {
+      font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+      padding: 20px 0; cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between;
+      list-style: none; user-select: none;
+    }
+    .faq-q::-webkit-details-marker, .faq-q::marker { display: none; }
+    .faq-q::after {
+      content: '+';
+      font-family: var(--mono); font-size: 20px; font-weight: 300;
+      color: var(--muted); flex-shrink: 0; margin-left: 24px;
+      transition: color 0.12s;
+    }
+    .faq-item[open] > .faq-q::after { content: '−'; color: var(--accent); }
+    .faq-a { font-size: 15px; color: var(--muted); line-height: 1.7; max-width: 700px; padding-bottom: 20px; margin: 0; }
 
     /* FOOTER */
     footer {
@@ -1137,46 +1126,34 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
   <div class="faq-inner">
     <div class="faq-label">FAQ</div>
     <h2>Common questions.</h2>
-    <div class="faq-item">
-      <div class="faq-q">Can Claude deploy a website using ItsLive?</div>
-      <p class="faq-a">Yes. Tell Claude to read <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">https://api.itslive.fyi/llms.txt</code> — a plain-text file with agent-readable instructions. Claude handles signup, gets an API key in the response body, creates a site, and uploads your files. No browser required.</p>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">Does it work with ChatGPT, Codex, or Cursor?</div>
-      <p class="faq-a">Any tool that can make HTTP requests works — ChatGPT, OpenAI Codex, Cursor, GitHub Copilot, Gemini, or a script you wrote yourself. Paste the getting-started prompt from this page into whichever tool you're using.</p>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">How fast is a deploy?</div>
+    <details class="faq-item">
+      <summary class="faq-q">Can I use ItsLive with Claude, ChatGPT, Codex, or Cursor?</summary>
+      <p class="faq-a">Yes — any tool that can make HTTP requests works. Claude and Claude Code can follow the instructions at <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">https://api.itslive.fyi/llms.txt</code> autonomously. For ChatGPT, Codex, Cursor, GitHub Copilot, or Gemini, paste the getting-started prompt from this page into whichever tool you're using.</p>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">How do I deploy an HTML file or dashboard?</summary>
+      <p class="faq-a">Sign up, get an API key, then: <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">PUT /sites/{name}</code> with your HTML file and <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">Content-Type: text/html</code>. A live URL comes back in the response. Signup to live URL takes under a minute.</p>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">How do I host an AI-generated website?</summary>
+      <p class="faq-a">POST to <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">/sites</code> to create a slot, then PUT to <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">/sites/{name}</code> with your HTML file or a ZIP of the full site. If the AI that built the files has API access, it can do the upload itself — no browser, no dashboard, no human step required.</p>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">How fast is a deploy?</summary>
       <p class="faq-a">Under a second after upload. No build step, no deployment queue. Files land on a global CDN and serve immediately.</p>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">Do I need a credit card?</div>
-      <p class="faq-a">No. The free tier is 3 active sites, 5 MB each, 50 deploys a month — no card, no expiry.</p>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">What kind of sites can I host?</div>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">Is there a free tier?</summary>
+      <p class="faq-a">Yes. Three active sites, 5 MB each, 50 deploys a month — no credit card, no expiry.</p>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">What kind of sites can I host?</summary>
       <p class="faq-a">Static sites: HTML, CSS, JS, images. Single-page apps with client-side routing work out of the box. No server-side code or databases.</p>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">How is this different from Netlify or Vercel?</div>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">How is this different from Netlify or Vercel?</summary>
       <p class="faq-a">Netlify and Vercel are built for developers at a dashboard. ItsLive is API-first: the key comes back in a JSON response, there's no OAuth redirect, and a deploy completes in one PUT request. An AI agent can go from zero to live URL with four API calls and no human intervention.</p>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">How do I deploy an HTML dashboard?</div>
-      <p class="faq-a">Sign up, get an API key, then run one command: <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">PUT /sites/{name}</code> with your HTML file and <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">Content-Type: text/html</code>. You get a live URL back in the response. Signup to live URL takes under a minute.</p>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">How do I host an AI-generated website?</div>
-      <p class="faq-a">Upload the files directly via API. POST to <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">/sites</code> to create a slot, then PUT to <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">/sites/{name}</code> with your HTML file or a ZIP of the full site. If the AI agent that built the files also has API access, it can do the upload itself — no browser, no dashboard, no human step.</p>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">How do I make a local website public?</div>
-      <p class="faq-a">One command: <code style="font-family:var(--mono);font-size:13px;background:var(--surface);padding:1px 5px">curl -X PUT https://api.itslive.fyi/sites/{name} -H "X-API-Key: ..." -H "Content-Type: text/html" --data-binary @index.html</code>. Free tier covers 3 sites with no credit card required.</p>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">How do I deploy a static site for free?</div>
-      <p class="faq-a">Sign up at itslive.fyi — free tier is 3 active sites, 5 MB each, 50 deploys a month, no card required. Upload HTML, CSS, JS, and images as a ZIP or single file. Single-page apps with client-side routing work out of the box.</p>
-    </div>
+    </details>
   </div>
 </section>
 
