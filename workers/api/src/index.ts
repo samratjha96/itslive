@@ -80,13 +80,21 @@ STEP 2 — DEPLOY A SITE
     PUT /sites/{name}
     X-API-Key: il_live_...
 
-    Option A — Single HTML file:
-      Content-Type: text/html
-      <body>Hello world</body>
+    Option A — Single file (raw body):
+      Content-Type: text/html         → saved as index.html
+      Content-Type: image/gif         → saved as image.gif
+      Content-Type: image/png         → saved as image.png
+      Content-Type: image/jpeg        → saved as image.jpg
+      Content-Type: image/webp        → saved as image.webp
+      Content-Type: image/svg+xml     → saved as image.svg
+      Content-Type: video/mp4         → saved as video.mp4
+      Content-Type: application/pdf   → saved as document.pdf
+      <file bytes>
 
-    Option B — ZIP archive (must contain index.html at root):
+    Option B — ZIP archive:
       Content-Type: application/zip
       <zip bytes>
+      Note: index.html required at root only when ZIP contains HTML files.
 
     Option C — Multipart form:
       Content-Type: multipart/form-data
@@ -95,7 +103,9 @@ STEP 2 — DEPLOY A SITE
     → {"url": "...", "deploy_id": "...", "deployed_at": "...",
        "size_bytes": ..., "file_count": ..., "sha256": "..."}
 
-2c. Show the user the "url". That is their live site.
+2c. Show the user the live URL.
+    For HTML sites: root URL (https://{name}.itslive.fyi/) serves the page.
+    For media files: access by direct path (https://{name}.itslive.fyi/image.gif).
 
 To update: repeat step 2b with the same name.
 Deploys are atomic — old version stays live until new upload completes.
@@ -235,7 +245,7 @@ Upload:
   FILE_TOO_LARGE                → Reduce total size; free plan limit is 5 MB
   TOO_MANY_FILES                → Max 100 files per deploy
   NO_FILES                      → Request body has no file content
-  ENTRYPOINT_MISSING            → Must include index.html at root
+  ENTRYPOINT_MISSING            → Deploy has HTML files but no index.html; add one or use a media-only deploy
   INVALID_ZIP                   → ZIP is corrupt or not a valid archive
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -251,7 +261,7 @@ SITE SERVING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Sites served at: https://{name}.itslive.fyi
-SPA routing: any missing path falls back to index.html automatically
+SPA routing: missing paths fall back to index.html when it exists (HTML sites only)
 Cache TTL: 300s default · override per-deploy via X-Cache-TTL header on PUT /sites/{name} (30–86400s)
 Site names are permanent — no rename after creation
 `);
