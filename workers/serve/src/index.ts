@@ -269,6 +269,11 @@ function r2ToResponse(object: R2ObjectBody, contentType: string, isProtected = f
   const headers = new Headers(SECURITY_HEADERS);
   headers.set('Content-Type', contentType);
   headers.set('ETag', object.httpEtag);
+  // SVGs can contain <script> tags. Lock down the CSP when serving one as a
+  // standalone page so inline scripts cannot execute.
+  if (contentType === 'image/svg+xml') {
+    headers.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:");
+  }
   if (isProtected) {
     // Never let intermediaries cache protected content
     headers.set('Cache-Control', 'private, no-store');

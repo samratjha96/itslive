@@ -273,16 +273,17 @@ router.put('/:name', async c => {
       }
     }
   } else {
-    // Raw body — treat as single index.html
     const bytes = new Uint8Array(await c.req.arrayBuffer());
-    files.push({ path: 'index.html', body: bytes, contentType: 'text/html; charset=utf-8' });
+    const { path, contentType: ct } = rawBodyFile(contentType);
+    files.push({ path, body: bytes, contentType: ct });
   }
 
   if (files.length === 0) {
     return c.json({ error: { code: 'NO_FILES', message: 'No files provided.' } }, 400);
   }
-  if (!files.some(f => f.path === 'index.html')) {
-    return c.json({ error: { code: 'ENTRYPOINT_MISSING', message: 'Deploy must include index.html.' } }, 400);
+  const hasHtml = files.some(f => f.contentType.startsWith('text/html'));
+  if (hasHtml && !files.some(f => f.path === 'index.html')) {
+    return c.json({ error: { code: 'ENTRYPOINT_MISSING', message: 'Deploy includes HTML files but no index.html entrypoint.' } }, 400);
   }
   if (files.length > 100) {
     return c.json({ error: { code: 'TOO_MANY_FILES', message: 'Deploy cannot exceed 100 files.' } }, 400);
@@ -467,6 +468,26 @@ async function revokeAllSessions(env: Env, siteId: string): Promise<number> {
   } while (cursor);
 
   return count;
+}
+
+// Maps a raw-body Content-Type to a sensible filename + normalised content type.
+// Unrecognised types fall back to index.html so existing HTML behaviour is unchanged.
+function rawBodyFile(mimeType: string): { path: string; contentType: string } {
+  const base = mimeType.split(';')[0].trim().toLowerCase();
+  const known: Record<string, string> = {
+    'image/gif':       'image.gif',
+    'image/png':       'image.png',
+    'image/jpeg':      'image.jpg',
+    'image/webp':      'image.webp',
+    'image/svg+xml':   'image.svg',
+    'image/x-icon':    'image.ico',
+    'video/mp4':       'video.mp4',
+    'video/webm':      'video.webm',
+    'application/pdf': 'document.pdf',
+  };
+  const filename = known[base];
+  if (filename) return { path: filename, contentType: base };
+  return { path: 'index.html', contentType: 'text/html; charset=utf-8' };
 }
 
 // Sanitize uploaded file paths — prevent path traversal
