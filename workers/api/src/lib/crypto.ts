@@ -12,6 +12,11 @@ export async function sha256(text: string): Promise<string> {
   return toHex(hash);
 }
 
+export async function sha256Bytes(bytes: Uint8Array): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return toHex(hash);
+}
+
 // Constant-time string comparison
 export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;

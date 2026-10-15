@@ -23,11 +23,13 @@ const SECURITY_HEADERS: Record<string, string> = {
   'Permissions-Policy': 'geolocation=(), camera=(), microphone=()',
   'Content-Security-Policy': [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com",
-    "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
-    "font-src 'self' fonts.gstatic.com",
-    "img-src 'self' data: https:",
-    "connect-src 'self' https:",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:",
+    "style-src 'self' 'unsafe-inline' https:",
+    "font-src 'self' data: https:",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' data: blob: https:",
+    "connect-src 'self' https: wss:",
+    "worker-src 'self' blob:",
     "frame-ancestors 'none'",
     "form-action 'self'",
   ].join('; '),
@@ -42,6 +44,9 @@ export default {
 
     // Apex domain or unrecognised host — serve landing page assets from R2
     if (host === SERVE_DOMAIN || !host.endsWith('.' + SERVE_DOMAIN)) {
+      if (url.pathname === '/llms.txt') {
+        return fetch('https://api.itslive.fyi/llms.txt');
+      }
       const LANDING_ASSETS: Record<string, string> = {
         'favicon.svg':   'image/svg+xml',
         'og-image.png':  'image/png',
@@ -57,6 +62,7 @@ export default {
           headers: {
             'Content-Type': contentType ?? 'text/html; charset=utf-8',
             'Cache-Control': 'public, max-age=300',
+            'Link': '<https://itslive.fyi/llms.txt>; rel="llms-txt"',
           },
         });
       }

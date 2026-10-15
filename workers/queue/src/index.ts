@@ -27,9 +27,6 @@ export default {
           case 'existing_account_notice':
             await sendExistingAccountNotice(env.RESEND_API_KEY, body.email);
             break;
-          case 'post_deploy_cache_purge':
-            await env.KV.delete(`site:${body.site_name}`);
-            break;
           case 'site_delete_cleanup':
             await deleteSiteFiles(env, body.user_id, body.site_name);
             break;

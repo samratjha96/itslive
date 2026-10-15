@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { unzipSync } from 'fflate';
-import { sha256, hashPassword } from '../lib/crypto';
+import { sha256, sha256Bytes, hashPassword } from '../lib/crypto';
 import { ulid } from '../lib/id';
 import { generateSlug, RESERVED_NAMES, SLUG_PATTERN } from '../lib/words';
 import { authMiddleware } from '../middleware/auth';
@@ -263,11 +263,14 @@ router.put('/:name', async c => {
     }
   } else if (contentType.startsWith('multipart/form-data')) {
     const form = await c.req.formData();
-    for (const [, value] of form.entries()) {
+    for (const [fieldName, value] of form.entries()) {
       if (typeof value !== 'string' && 'arrayBuffer' in value) {
         const file = value as Blob & { name?: string; type: string };
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const safePath = sanitizePath((file as { name?: string }).name ?? 'index.html');
+        const rawName = fieldName.includes('/') || fieldName.includes('.')
+          ? fieldName
+          : ((file as { name?: string }).name ?? 'index.html');
+        const safePath = sanitizePath(rawName);
         if (!safePath) continue;
         files.push({ path: safePath, body: bytes, contentType: file.type || inferContentType(safePath) });
       }
@@ -297,8 +300,12 @@ router.put('/:name', async c => {
   const now = Date.now();
   const deployId = ulid();
   const objectPrefix = `sites/${userId}/${name}/${deployId}`;
-  const combined = files.map(f => f.path + ':' + f.body.byteLength).join('|');
-  const deployHash = await sha256(combined);
+  const fileDigests = await Promise.all(
+    [...files]
+      .sort((a, b) => a.path.localeCompare(b.path))
+      .map(async f => `${f.path}:${await sha256Bytes(f.body)}`),
+  );
+  const deployHash = await sha256(fileDigests.join('|'));
 
   // Insert deploy record as 'uploading' before touching R2.
   // If R2 writes fail, the deploy stays 'uploading' and the old version remains live.
@@ -328,8 +335,8 @@ router.put('/:name', async c => {
     );
   }
   await c.env.DB.batch(flipStatements);
+  await c.env.KV.delete(`site:${name}`);
 
-  await c.env.QUEUE.send({ type: 'post_deploy_cache_purge', site_name: name });
   if (site.active_deploy_id) {
     await c.env.QUEUE.send({ type: 'deploy_cleanup', site_id: site.id, deploy_id: site.active_deploy_id });
   }
@@ -344,7 +351,9 @@ router.delete('/:name', async c => {
   const { userId } = c.get('auth');
   const name = c.req.param('name');
   const site = await getSiteForUser(c.env, userId, name);
-  if (!site) return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
+  if (!site || site.status === 'deleted_cooling') {
+    return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
+  }
   if (site.status === 'deactivated') {
     return c.json({ error: { code: 'ALREADY_DEACTIVATED', message: 'Site is already deactivated. Use POST /sites/:name/restore to bring it back.' } }, 409);
   }
@@ -422,11 +431,6 @@ function siteUrl(domain: string, name: string): string {
 }
 
 async function getSiteForUser(env: Env, userId: string, name: string): Promise<Site | null> {
-  // Includes 'deleted_cooling' — each route guards its own valid statuses.
-  // Note: DELETE /:name does not exclude 'deleted_cooling', so a site already
-  // in cooling could be transitioned back to 'deactivated'. Acceptable for now
-  // since the anti-entropy cron will re-reap it, but a stricter filter here
-  // would prevent the edge case.
   return env.DB
     .prepare("SELECT * FROM sites WHERE name = ? AND user_id = ? AND status != 'deleted'")
     .bind(name, userId)
