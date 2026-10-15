@@ -584,7 +584,7 @@
       letter-spacing: -0.03em; text-transform: uppercase; margin-top: 8px;
     }
     .pricing-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr);
+      display: grid; grid-template-columns: repeat(2, 1fr);
     }
     .pricing-plan {
       padding: 44px 48px; border-right: 2px solid var(--border);
@@ -1050,7 +1050,7 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
 <section class="pricing" id="pricing">
   <div class="pricing-header">
     <div class="section-label">Pricing</div>
-    <h2>Start free. Scale when your agents do.</h2>
+    <h2>Start free. Pay once when your agents scale.</h2>
   </div>
   <div class="pricing-grid">
     <div class="pricing-plan">
@@ -1060,48 +1060,32 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
       <div class="plan-divider"></div>
       <ul class="plan-features">
         <li>3 active sites</li>
-        <li>5 MB per site</li>
+        <li>5 MB per deploy</li>
         <li>50 publishes / month</li>
         <li>100 API calls / hour</li>
-        <li>Password protection</li>
+        <li>Password protection (24h sessions)</li>
         <li>Auto-generated URLs</li>
         <li class="dim">Custom site names</li>
-        <li class="dim">Custom domains</li>
-        <li class="dim">Site analytics</li>
+        <li class="dim">Search engine indexing</li>
       </ul>
       <a class="plan-cta filled" href="#getting-started">Get started</a>
     </div>
     <div class="pricing-plan">
-      <div class="plan-name">Builder</div>
-      <div class="plan-price"><sup>$</sup>9</div>
-      <div class="plan-period">per month</div>
+      <div class="plan-name">Pro</div>
+      <div class="plan-price"><sup>$</sup>10</div>
+      <div class="plan-period">one-time · lifetime access</div>
       <div class="plan-divider"></div>
       <ul class="plan-features">
-        <li>25 active sites</li>
-        <li>25 MB per site</li>
-        <li>500 publishes / month</li>
-        <li>1,000 API calls / hour</li>
-        <li>Password protection</li>
-        <li>Custom site names</li>
-        <li>Custom domains</li>
-        <li>Site analytics</li>
-      </ul>
-      <a class="plan-cta disabled" href="#">Free during beta</a>
-    </div>
-    <div class="pricing-plan">
-      <div class="plan-name">Studio</div>
-      <div class="plan-price"><sup>$</sup>29</div>
-      <div class="plan-period">per month</div>
-      <div class="plan-divider"></div>
-      <ul class="plan-features">
-        <li>200 active sites</li>
-        <li>100 MB per site</li>
+        <li>500 active sites</li>
+        <li>25 MB per deploy</li>
         <li>Unlimited publishes</li>
-        <li>10,000 API calls / hour</li>
-        <li>Everything in Builder</li>
-        <li>Priority support + SLA</li>
+        <li>2,000 API calls / hour</li>
+        <li>Password protection (up to 30-day sessions)</li>
+        <li>Custom site names</li>
+        <li>Search engine indexing enabled</li>
+        <li>Upgrade via API (<code style="font-family:var(--mono);font-size:12px">POST /billing/checkout</code>)</li>
       </ul>
-      <a class="plan-cta disabled" href="#">Free during beta</a>
+      <a class="plan-cta outline" href="#getting-started">Ask your AI to upgrade</a>
     </div>
   </div>
 </section>

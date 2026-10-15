@@ -26,6 +26,12 @@
     }
   ],
 
+  "assets": {
+    "directory": "../../landing",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+
   "routes": [
     {
       "pattern": "itslive.fyi",

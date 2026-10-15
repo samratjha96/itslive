@@ -2,6 +2,7 @@ interface Env {
   DB: D1Database;
   KV: KVNamespace;
   SITES: R2Bucket;
+  ASSETS: Fetcher;
 }
 
 interface SiteRecord {
@@ -42,31 +43,21 @@ export default {
     const url = new URL(request.url);
     const host = request.headers.get('Host') ?? url.hostname;
 
-    // Apex domain or unrecognised host — serve landing page assets from R2
+    // Apex domain or unrecognised host — serve landing page assets from bundled Workers Assets
     if (host === SERVE_DOMAIN || !host.endsWith('.' + SERVE_DOMAIN)) {
       if (url.pathname === '/llms.txt') {
         return fetch('https://api.itslive.fyi/llms.txt');
       }
-      const LANDING_ASSETS: Record<string, string> = {
-        'favicon.svg':   'image/svg+xml',
-        'og-image.png':  'image/png',
-        'robots.txt':    'text/plain',
-        'sitemap.xml':   'application/xml',
-      };
-      const requestedPath = url.pathname.slice(1); // strip leading /
-      const contentType = LANDING_ASSETS[requestedPath];
-      const key = contentType ? `_landing/${requestedPath}` : '_landing/index.html';
-      const object = await env.SITES.get(key);
-      if (object && 'body' in object) {
-        return new Response(object.body, {
-          headers: {
-            'Content-Type': contentType ?? 'text/html; charset=utf-8',
-            'Cache-Control': 'public, max-age=300',
-            'Link': '<https://itslive.fyi/llms.txt>; rel="llms-txt"',
-          },
-        });
+      const assetUrl = new URL(request.url);
+      const allowedPaths = new Set(['/', '/index.html', '/favicon.svg', '/og-image.png', '/robots.txt', '/sitemap.xml']);
+      if (!allowedPaths.has(assetUrl.pathname)) {
+        assetUrl.pathname = '/index.html';
       }
-      return new Response('ItsLive', { headers: { 'Content-Type': 'text/plain' } });
+      const assetResp = await env.ASSETS.fetch(new Request(assetUrl.toString(), request));
+      const headers = new Headers(assetResp.headers);
+      headers.set('Cache-Control', 'public, max-age=300');
+      headers.set('Link', '<https://itslive.fyi/llms.txt>; rel="llms-txt"');
+      return new Response(assetResp.body, { status: assetResp.status, headers });
     }
 
     const siteName = host.slice(0, -(1 + SERVE_DOMAIN.length));
