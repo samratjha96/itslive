@@ -4,7 +4,7 @@
 -- transitions them to 'deleted_cooling' after cooling_until passes (7 days).
 -- SQLite requires a table rebuild to modify CHECK constraints.
 
-PRAGMA foreign_keys = OFF;
+PRAGMA defer_foreign_keys = ON;
 
 CREATE TABLE sites_new (
   id              TEXT PRIMARY KEY,
@@ -32,4 +32,4 @@ CREATE INDEX idx_sites_user_id     ON sites(user_id);
 CREATE INDEX idx_sites_name        ON sites(name);
 CREATE INDEX idx_sites_user_status ON sites(user_id, status);
 
-PRAGMA foreign_keys = ON;
+PRAGMA defer_foreign_keys = OFF;

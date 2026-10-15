@@ -21,11 +21,69 @@ const SIGNUP_RESPONSE = { message: 'Check your email for a verification code.' }
 const OTP_TTL = 600; // 10 minutes
 const MAX_ATTEMPTS = 5;
 
+const DISPOSABLE_EMAIL_DOMAINS = new Set([
+  '10minutemail.com',
+  '10minutemail.net',
+  'burnermail.io',
+  'discard.email',
+  'dispostable.com',
+  'emailondeck.com',
+  'fakeinbox.com',
+  'getairmail.com',
+  'getnada.com',
+  'grr.la',
+  'guerrillamail.biz',
+  'guerrillamail.com',
+  'guerrillamail.de',
+  'guerrillamail.info',
+  'guerrillamail.net',
+  'guerrillamail.org',
+  'guerrillamailblock.com',
+  'harakirimail.com',
+  'inboxkitten.com',
+  'mailcatch.com',
+  'maildrop.cc',
+  'mailesia.com',
+  'mailinator.com',
+  'mailnesia.com',
+  'mailnull.com',
+  'mailsac.com',
+  'mohmal.com',
+  'mytemp.email',
+  'pokemail.net',
+  'sharklasers.com',
+  'spam4.me',
+  'temp-mail.io',
+  'temp-mail.org',
+  'tempail.com',
+  'tempmail.com',
+  'tempmail.net',
+  'tempmailo.com',
+  'throwawaymail.com',
+  'tmpmail.net',
+  'tmpmail.org',
+  'trashmail.com',
+  'trashmail.net',
+  'yopmail.com',
+  'yopmail.fr',
+  'yopmail.net',
+]);
+
+function isDisposableEmail(email: string): boolean {
+  const domain = email.split('@')[1]?.toLowerCase();
+  if (!domain) return true;
+  if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) return true;
+  for (const blocked of DISPOSABLE_EMAIL_DOMAINS) {
+    if (domain.endsWith('.' + blocked)) return true;
+  }
+  return false;
+}
+
 router.post('/signup', async c => {
   const body = await c.req.json().catch(() => null);
   const parsed = SignupSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: { code: 'EMAIL_INVALID', message: 'Invalid email address.' } }, 400);
+  if (!parsed.success || isDisposableEmail(parsed.data.email)) {
+    return c.json({ error: { code: 'EMAIL_INVALID', message: 'Invalid or unsupported email address.' } }, 400);
   }
   const { email } = parsed.data;
 

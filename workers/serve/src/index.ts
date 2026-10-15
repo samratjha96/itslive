@@ -245,7 +245,7 @@ async function serveFile(env: Env, site: SiteRecord, filePath: string, request: 
     if (filePath !== 'index.html') {
       const fallback = await env.SITES.get(`${prefix}/index.html`);
       if (fallback) {
-        return r2ToResponse(fallback, 'text/html; charset=utf-8', site.password_protected);
+        return r2ToResponse(fallback, 'text/html; charset=utf-8', site);
       }
     }
     return notFound(site.name);
@@ -254,6 +254,9 @@ async function serveFile(env: Env, site: SiteRecord, filePath: string, request: 
   // R2Object without body = etag condition matched → 304 Not Modified
   if (!('body' in object)) {
     const h304: Record<string, string> = { ETag: object.httpEtag };
+    if (site.plan === 'free') {
+      h304['X-Robots-Tag'] = 'noindex, nofollow, noarchive';
+    }
     if (site.password_protected) {
       h304['Cache-Control'] = 'private, no-store';
       h304['Vary'] = 'Cookie';
@@ -262,19 +265,22 @@ async function serveFile(env: Env, site: SiteRecord, filePath: string, request: 
   }
 
   const contentType = object.httpMetadata?.contentType ?? 'application/octet-stream';
-  return r2ToResponse(object, contentType, site.password_protected);
+  return r2ToResponse(object, contentType, site);
 }
 
-function r2ToResponse(object: R2ObjectBody, contentType: string, isProtected = false): Response {
+function r2ToResponse(object: R2ObjectBody, contentType: string, site: SiteRecord): Response {
   const headers = new Headers(SECURITY_HEADERS);
   headers.set('Content-Type', contentType);
   headers.set('ETag', object.httpEtag);
+  if (site.plan === 'free') {
+    headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  }
   // SVGs can contain <script> tags. Lock down the CSP when serving one as a
   // standalone page so inline scripts cannot execute.
   if (contentType === 'image/svg+xml') {
     headers.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:");
   }
-  if (isProtected) {
+  if (site.password_protected) {
     // Never let intermediaries cache protected content
     headers.set('Cache-Control', 'private, no-store');
     headers.set('Vary', 'Cookie');
