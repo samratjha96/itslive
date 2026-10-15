@@ -11,31 +11,51 @@ const STRIPE_API_BASE = 'https://api.stripe.com/v1';
 const PRO_PRICE_CENTS = '1000'; // $10.00 one-time
 const CHECKOUT_LIFETIME_SECS = 1920; // 32 minutes (> Stripe's 30-minute minimum)
 
-async function stripePost<T>(
+async function stripeRequest<T>(
   secretKey: string,
+  method: 'GET' | 'POST',
   path: string,
-  params: Record<string, string>,
+  params?: Record<string, string>,
   idempotencyKey?: string,
 ): Promise<T> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${secretKey}`,
-    'Content-Type': 'application/x-www-form-urlencoded',
   };
+  let body: string | undefined;
+  if (method === 'POST') {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    body = new URLSearchParams(params ?? {}).toString();
+  }
   if (idempotencyKey) {
     headers['Idempotency-Key'] = idempotencyKey;
   }
 
-  const resp = await fetch(`${STRIPE_API_BASE}${path}`, {
-    method: 'POST',
-    headers,
-    body: new URLSearchParams(params).toString(),
-  });
-
-  const data = await resp.json() as T & { error?: { message?: string } };
-  if (!resp.ok) {
-    throw new Error(data.error?.message ?? `Stripe error ${resp.status}`);
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const resp = await fetch(`${STRIPE_API_BASE}${path}`, {
+        method,
+        headers,
+        body,
+        signal: AbortSignal.timeout(10_000),
+      });
+      const data = await resp.json() as T & { error?: { message?: string } };
+      if (!resp.ok) {
+        if (resp.status >= 500 && attempt === 0 && (method === 'GET' || Boolean(idempotencyKey))) {
+          continue;
+        }
+        throw new Error(data.error?.message ?? `Stripe error ${resp.status}`);
+      }
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 0 && (method === 'GET' || Boolean(idempotencyKey))) {
+        continue;
+      }
+      throw err;
+    }
   }
-  return data;
+  throw lastErr;
 }
 
 router.post('/billing/checkout', authMiddleware, async c => {
@@ -66,7 +86,15 @@ router.post('/billing/checkout', authMiddleware, async c => {
     .first<{ attempt_id: string; session_id: string | null; checkout_url: string | null; expires_at: number }>();
 
   if (existing && existing.expires_at > nowSecs && existing.session_id && existing.checkout_url) {
-    return c.json({ checkout_url: existing.checkout_url, session_id: existing.session_id });
+    const liveStatus = await getStripeSessionStatus(secretKey, existing.session_id);
+    if (liveStatus === 'open') {
+      return c.json({ checkout_url: existing.checkout_url, session_id: existing.session_id });
+    }
+    await c.env.DB.prepare('DELETE FROM billing_checkouts WHERE user_id = ?').bind(user.id).run();
+    if (liveStatus === 'paid') {
+      await applyPlanChange(c.env, user.id, 'pro');
+      return c.json({ error: { code: 'ALREADY_PRO', message: 'Account is already on the Pro plan.' } }, 409);
+    }
   }
 
   // Reserve or reuse an unexpired pending attempt so concurrent callers share
@@ -134,8 +162,9 @@ router.post('/billing/checkout', authMiddleware, async c => {
     params.customer_creation = 'always';
   }
 
-  const session = await stripePost<{ id: string; url: string }>(
+  const session = await stripeRequest<{ id: string; url: string }>(
     secretKey,
+    'POST',
     '/checkout/sessions',
     params,
     `pro_checkout:${activeAttempt.attempt_id}`,
@@ -181,7 +210,13 @@ router.get('/billing/checkout', async c => {
     cancel_url: `${baseUrl}/#pricing`,
   };
 
-  const session = await stripePost<{ id: string; url: string }>(secretKey, '/checkout/sessions', params);
+  const session = await stripeRequest<{ id: string; url: string }>(
+    secretKey,
+    'POST',
+    '/checkout/sessions',
+    params,
+    `web_checkout:${ulid()}`,
+  );
   return c.redirect(session.url, 303);
 });
 
@@ -286,7 +321,24 @@ router.post('/webhooks/stripe', async c => {
         .prepare('DELETE FROM billing_checkouts WHERE user_id = ?')
         .bind(userId)
         .run();
+      await expireOpenCustomerSessions(c.env.STRIPE_SECRET_KEY, customerId, obj.id ?? null);
       await reconcileUserEntitlement(c.env, userId);
+      break;
+    }
+
+    case 'checkout.session.expired': {
+      const userId = await resolveWebhookUserId(c.env, metadataUserId, customerId, paymentIntentId);
+      if (obj.id) {
+        await c.env.DB
+          .prepare('DELETE FROM billing_checkouts WHERE session_id = ?')
+          .bind(obj.id)
+          .run();
+      } else if (userId) {
+        await c.env.DB
+          .prepare('DELETE FROM billing_checkouts WHERE user_id = ?')
+          .bind(userId)
+          .run();
+      }
       break;
     }
 
@@ -380,6 +432,47 @@ router.post('/webhooks/stripe', async c => {
 
   return c.json({ received: true });
 });
+
+async function getStripeSessionStatus(secretKey: string, sessionId: string): Promise<'open' | 'paid' | 'closed'> {
+  try {
+    const s = await stripeRequest<{ status?: string; payment_status?: string }>(
+      secretKey,
+      'GET',
+      `/checkout/sessions/${encodeURIComponent(sessionId)}`,
+    );
+    if (s.payment_status === 'paid') return 'paid';
+    if (s.status === 'open') return 'open';
+    return 'closed';
+  } catch {
+    // On transient network error, assume cached session is still usable
+    return 'open';
+  }
+}
+
+// Best-effort cleanup: when a purchase succeeds, expire any other still-open
+// Checkout sessions for the same Stripe customer so a second open tab cannot pay twice.
+async function expireOpenCustomerSessions(
+  secretKey: string | undefined,
+  customerId: string | null,
+  completedSessionId: string | null,
+): Promise<void> {
+  if (!secretKey || !customerId) return;
+  try {
+    const list = await stripeRequest<{ data?: { id: string; status?: string }[] }>(
+      secretKey,
+      'GET',
+      `/checkout/sessions?customer=${encodeURIComponent(customerId)}&status=open&limit=10`,
+    );
+    const others = (list.data ?? []).filter(s => s.id && s.id !== completedSessionId && s.status === 'open');
+    await Promise.all(
+      others.map(s =>
+        stripeRequest(secretKey, 'POST', `/checkout/sessions/${encodeURIComponent(s.id)}/expire`, {}, `expire:${s.id}`).catch(() => {}),
+      ),
+    );
+  } catch (err) {
+    console.warn(`billing: failed to expire open sessions for customer ${customerId}:`, err);
+  }
+}
 
 async function getPurchaseUserId(env: Env, piKey: string): Promise<string | null> {
   const row = await env.DB
