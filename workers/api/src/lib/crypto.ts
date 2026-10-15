@@ -89,3 +89,41 @@ export async function verifyPassword(password: string, stored: string): Promise<
   );
   return timingSafeEqual(toHex(bits), expectedHash);
 }
+
+export async function verifyStripeSignature(
+  payload: string,
+  header: string,
+  secret: string,
+  toleranceSecs = 300,
+): Promise<boolean> {
+  let timestamp = '';
+  const signatures: string[] = [];
+
+  for (const part of header.split(',')) {
+    const [key, value] = part.trim().split('=');
+    if (key === 't' && value) timestamp = value;
+    if (key === 'v1' && value) signatures.push(value);
+  }
+  if (!timestamp || signatures.length === 0) return false;
+
+  const tsNum = Number(timestamp);
+  if (!Number.isFinite(tsNum) || Math.abs(Math.floor(Date.now() / 1000) - tsNum) > toleranceSecs) {
+    return false;
+  }
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sigBuf = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`${timestamp}.${payload}`),
+  );
+  const expected = toHex(sigBuf);
+
+  return signatures.some(sig => timingSafeEqual(sig, expected));
+}

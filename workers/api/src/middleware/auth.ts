@@ -11,6 +11,10 @@ declare module 'hono' {
 
 const API_CALL_WINDOW_SECS = 3600;
 
+function normalizePlan(rawPlan: string): AuthContext['plan'] {
+  return rawPlan === 'free' ? 'free' : 'pro';
+}
+
 export const authMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
   // Reject keys in query params — key leakage risk
   const url = new URL(c.req.url);
@@ -33,7 +37,7 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
   // KV warm cache (60s TTL). Miss falls through to D1.
   const cached = await c.env.KV.get(`apikey:${keyHash}`, 'json') as { user_id: string; plan: string; key_id: string } | null;
   if (cached) {
-    const plan = cached.plan as AuthContext['plan'];
+    const plan = normalizePlan(cached.plan);
     const allowed = await enforceRateLimit(c.env, cached.user_id, plan);
     if (!allowed) {
       return c.json({ error: { code: 'RATE_LIMITED', message: 'Rate limit exceeded. Try again later.' } }, 429, { 'Retry-After': String(API_CALL_WINDOW_SECS) });
@@ -68,7 +72,7 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
     return c.json({ error: { code: 'INVALID_KEY', message: 'Account not found.' } }, 401);
   }
 
-  const plan = user.plan as AuthContext['plan'];
+  const plan = normalizePlan(user.plan);
   const allowed = await enforceRateLimit(c.env, row.user_id, plan);
   if (!allowed) {
     return c.json({ error: { code: 'RATE_LIMITED', message: 'Rate limit exceeded. Try again later.' } }, 429, { 'Retry-After': String(API_CALL_WINDOW_SECS) });
@@ -96,9 +100,13 @@ async function enforceRateLimit(env: Env, userId: string, plan: string): Promise
 // webhook handler after updating users.plan in D1 so the new plan takes
 // effect immediately instead of waiting for the 60s TTL to expire.
 export async function invalidateUserKeyCache(env: Env, userId: string): Promise<void> {
-  const keys = await env.DB
-    .prepare('SELECT key_hash FROM api_keys WHERE user_id = ?')
-    .bind(userId)
-    .all<{ key_hash: string }>();
-  await Promise.all((keys.results ?? []).map(k => env.KV.delete(`apikey:${k.key_hash}`)));
+  try {
+    const keys = await env.DB
+      .prepare('SELECT key_hash FROM api_keys WHERE user_id = ?')
+      .bind(userId)
+      .all<{ key_hash: string }>();
+    await Promise.all((keys.results ?? []).map(k => env.KV.delete(`apikey:${k.key_hash}`).catch(() => {})));
+  } catch (err) {
+    console.warn(`auth: KV key cache invalidation failed for user ${userId}:`, err);
+  }
 }

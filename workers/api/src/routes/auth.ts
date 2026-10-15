@@ -8,12 +8,12 @@ import { authMiddleware } from '../middleware/auth';
 const router = new Hono<{ Bindings: Env }>();
 
 const SignupSchema = z.object({
-  email: z.string().email().max(254).toLowerCase(),
+  email: z.string().trim().toLowerCase().email().max(254),
 });
 
 const VerifySchema = z.object({
-  email: z.string().email().max(254).toLowerCase(),
-  code: z.string().length(6).toUpperCase(),
+  email: z.string().trim().toLowerCase().email().max(254),
+  code: z.string().trim().toUpperCase().length(6),
 });
 
 // Same response regardless of outcome (anti-enumeration)

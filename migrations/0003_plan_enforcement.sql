@@ -2,9 +2,9 @@
 -- Run: npx wrangler d1 execute itslive-prod --file=migrations/0003_plan_enforcement.sql --remote
 --
 -- SQLite does not support ALTER TABLE to modify CHECK constraints, so we
--- rebuild the sites table. Foreign keys are temporarily disabled for the swap.
+-- rebuild the sites table. Foreign keys are temporarily deferred for the swap.
 
-PRAGMA foreign_keys = OFF;
+PRAGMA defer_foreign_keys = ON;
 
 CREATE TABLE sites_new (
   id              TEXT PRIMARY KEY,
@@ -32,4 +32,4 @@ CREATE INDEX idx_sites_user_id    ON sites(user_id);
 CREATE INDEX idx_sites_name       ON sites(name);
 CREATE INDEX idx_sites_user_status ON sites(user_id, status);
 
-PRAGMA foreign_keys = ON;
+PRAGMA defer_foreign_keys = OFF;

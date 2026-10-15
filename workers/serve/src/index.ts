@@ -13,7 +13,7 @@ interface SiteRecord {
   active_deploy_id: string | null;
   password_protected: boolean;
   session_ttl_hrs: number;
-  plan: 'free' | 'builder' | 'studio';
+  plan: 'free' | 'pro';
 }
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -125,7 +125,9 @@ export default {
 async function lookupSite(env: Env, name: string): Promise<SiteRecord | null> {
   const kvKey = `site:${name}`;
   const cached = await env.KV.get(kvKey, 'json') as SiteRecord | null;
-  if (cached) return cached;
+  if (cached) {
+    return { ...cached, plan: (cached.plan as string) === 'free' ? 'free' : 'pro' };
+  }
 
   const row = await env.DB
     .prepare(`
@@ -140,7 +142,7 @@ async function lookupSite(env: Env, name: string): Promise<SiteRecord | null> {
       id: string; user_id: string; name: string; status: string;
       cooling_until: number | null; active_deploy_id: string | null;
       password_hash: string | null; session_ttl_hrs: number;
-      plan: 'free' | 'builder' | 'studio';
+      plan: string;
     }>();
 
   if (!row) return null;
@@ -154,7 +156,7 @@ async function lookupSite(env: Env, name: string): Promise<SiteRecord | null> {
     active_deploy_id: row.active_deploy_id,
     password_protected: row.password_hash !== null,
     session_ttl_hrs: row.session_ttl_hrs,
-    plan: row.plan,
+    plan: row.plan === 'free' ? 'free' : 'pro',
   };
 
   await env.KV.put(kvKey, JSON.stringify(record), { expirationTtl: 60 });

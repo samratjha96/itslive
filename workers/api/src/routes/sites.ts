@@ -73,7 +73,7 @@ router.post('/', async c => {
 
   if (requestedName) {
     if (plan === 'free') {
-      return c.json({ error: { code: 'CUSTOM_SLUG_REQUIRES_PAID_PLAN', message: 'Custom site names require Builder plan or higher.' } }, 402);
+      return c.json({ error: { code: 'CUSTOM_SLUG_REQUIRES_PAID_PLAN', message: 'Custom site names require the Pro plan ($10 one-time). Call POST /billing/checkout to upgrade.' } }, 402);
     }
     if (!SLUG_PATTERN.test(requestedName)) {
       return c.json({ error: { code: 'NAME_INVALID', message: 'Site name must be 3-40 lowercase alphanumeric characters and hyphens.' } }, 400);
@@ -137,7 +137,7 @@ router.post('/', async c => {
   }
 
   if (insertResult.meta.changes === 0) {
-    return c.json({ error: { code: 'PLAN_LIMIT_REACHED', message: `Your ${plan} plan allows ${limit} active sites.` } }, 402);
+    return c.json({ error: { code: 'PLAN_LIMIT_REACHED', message: `Your ${plan} plan allows ${limit} active sites. Call POST /billing/checkout to upgrade to Pro.` } }, 402);
   }
 
   const url = siteUrl(c.env.SERVE_DOMAIN, siteName);
@@ -244,7 +244,7 @@ router.put('/:name', async c => {
     return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
   }
   if (site.status === 'suspended') {
-    return c.json({ error: { code: 'SITE_SUSPENDED', message: 'This site is suspended. Upgrade your plan to resume deploys.' } }, 402);
+    return c.json({ error: { code: 'SITE_SUSPENDED', message: 'This site is suspended. Call POST /billing/checkout to upgrade to Pro and resume deploys.' } }, 402);
   }
   if (site.status !== 'active') {
     return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
@@ -482,7 +482,7 @@ async function checkMonthlyDeployQuota(env: Env, userId: string, plan: Plan): Pr
     .first<{ n: number }>();
 
   if ((monthDeployCount?.n ?? 0) >= monthLimit) {
-    return { status: 402, code: 'PLAN_LIMIT_REACHED', message: `Monthly deploy limit (${monthLimit}) reached.` };
+    return { status: 402, code: 'PLAN_LIMIT_REACHED', message: `Monthly deploy limit (${monthLimit}) reached. Call POST /billing/checkout to upgrade to Pro.` };
   }
   return null;
 }

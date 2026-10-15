@@ -4,6 +4,7 @@ import type { Env } from './types';
 import authRouter from './routes/auth';
 import sitesRouter from './routes/sites';
 import accountRouter from './routes/account';
+import billingRouter from './routes/billing';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -93,7 +94,7 @@ One-step create + deploy (recommended for new sites):
            "deploy_id": "...", "deployed_at": "...", "size_bytes": ...,
            "file_count": ..., "sha256": "..."}
 
-    Custom name (Builder plan+): pass "name": "my-project" in JSON or X-Site-Name header.
+    Custom name (Pro plan): pass "name": "my-project" in JSON or X-Site-Name header.
     Rules: 3–40 chars, lowercase alphanumeric and hyphens only.
 
     (You can also create an empty site first with POST /sites {} and deploy in a separate step.)
@@ -162,7 +163,7 @@ PASSWORD PROTECTION
 Enable:
   PUT /sites/{name}/access
   {"password": "min-8-chars", "session_ttl_hrs": 24}
-  session_ttl_hrs max: free=24, builder=168, studio=720. Default: 24.
+  session_ttl_hrs max: free=24, pro=720. Default: 24.
   → {"password_protected": true, "session_ttl_hrs": 24}
   All existing sessions are revoked immediately.
 
@@ -193,15 +194,20 @@ Rotate key (user has current key, wants a new one):
   → {"api_key": "il_live_...(new)", "old_key_expires": <unix_seconds>}
   Tell the user to save the new key. Old key valid 60 seconds.
 
+Upgrade to Pro ($10 one-time):
+  POST /billing/checkout
+  X-API-Key: il_live_...
+  → {"checkout_url": "https://checkout.stripe.com/...", "session_id": "..."}
+  Give checkout_url to the user. Once paid, the account upgrades to Pro automatically.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PLANS & LIMITS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   free:    3 sites · 5 MB/deploy · 50 deploys/month · 100 API calls/hour · session TTL ≤ 24h
-  builder: 25 sites · 25 MB/deploy · 500 deploys/month · 1,000 API calls/hour · session TTL ≤ 168h
-  studio:  200 sites · 100 MB/deploy · unlimited deploys · 10,000 API calls/hour · session TTL ≤ 720h
+  pro:     500 sites · 25 MB/deploy · unlimited deploys · 2,000 API calls/hour · session TTL ≤ 720h ($10 one-time)
 
-Custom site names: Builder plan or higher.
+Custom site names & search engine indexing: Pro plan.
 Suspended and active sites both count toward the site limit.
 Deactivated sites do NOT count toward the site limit.
 
@@ -236,8 +242,9 @@ Sites:
   SITE_NOT_RESTORABLE           → Not found, already purged, or not deactivated
 
 Plan/limits:
-  PLAN_LIMIT_REACHED            → Check GET /usage; free: 3 sites, 5 MB, 50 deploys/month
-  CUSTOM_SLUG_REQUIRES_PAID_PLAN → Omit "name" from POST /sites to use an auto-generated name
+  PLAN_LIMIT_REACHED            → Check GET /usage or call POST /billing/checkout to upgrade to Pro ($10 one-time)
+  CUSTOM_SLUG_REQUIRES_PAID_PLAN → Omit "name" from POST /sites or call POST /billing/checkout to upgrade to Pro
+  ALREADY_PRO                   → Account is already on the Pro plan
   NAME_TAKEN                    → Name in use or in cooling; choose a different name
   NAME_INVALID                  → 3–40 chars, lowercase alphanumeric + hyphens only
   NAME_RESERVED                 → Choose a different name
@@ -276,6 +283,9 @@ app.route('/sites', sitesRouter);
 
 // Account routes: /usage  /account
 app.route('/', accountRouter);
+
+// Billing & Stripe webhook routes: /billing/checkout  /webhooks/stripe
+app.route('/', billingRouter);
 
 app.notFound(c => c.json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found.' } }, 404));
 

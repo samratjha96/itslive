@@ -77,13 +77,14 @@ Ask Claude or ChatGPT to "deploy this using itslive.fyi" and it handles the whol
 
 ## Plans
 
-|  | Free | Builder | Studio |
-|--|------|---------|--------|
-| Sites | 3 | 25 | 200 |
-| Max deploy size | 5 MB | 25 MB | 100 MB |
-| Deploys / month | 50 | 500 | Unlimited |
-| API calls / hour | 100 | 1,000 | 10,000 |
-| Custom site names | — | ✓ | ✓ |
+|  | Free | Pro ($10 one-time) |
+|--|------|--------------------|
+| Sites | 3 | 500 |
+| Max deploy size | 5 MB | 25 MB |
+| Deploys / month | 50 | Unlimited |
+| API calls / hour | 100 | 2,000 |
+| Custom site names | — | ✓ |
+| Search indexing | — | ✓ |
 
 ---
 
@@ -112,6 +113,8 @@ Full agent-executable instructions at [`/llms.txt`](https://api.itslive.fyi/llms
 | `POST` | `/sites/:name/access/revoke` | ✓ | Revoke all active sessions |
 | `GET` | `/usage` | ✓ | Usage and quota |
 | `GET` | `/account` | ✓ | Account details |
+| `POST` | `/billing/checkout` | ✓ | Create a $10 one-time Stripe Checkout URL for Pro |
+| `POST` | `/webhooks/stripe` | — | Stripe webhook receiver |
 
 ### Deploy formats
 

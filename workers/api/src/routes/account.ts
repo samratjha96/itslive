@@ -5,9 +5,7 @@ import type { Env } from '../types';
 
 const router = new Hono<{ Bindings: Env }>();
 
-router.use('*', authMiddleware);
-
-router.get('/usage', async c => {
+router.get('/usage', authMiddleware, async c => {
   const { userId, plan } = c.get('auth');
 
   const siteCount = await c.env.DB
@@ -18,18 +16,13 @@ router.get('/usage', async c => {
   const monthStart = new Date();
   monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
 
-  // Total storage: sum of latest deploy size per site
+  // Total storage: sum of active deploy size across active/suspended sites
   const storage = await c.env.DB
     .prepare(`
       SELECT COALESCE(SUM(d.size_bytes), 0) as total
-      FROM deploys d
-      INNER JOIN (
-        SELECT site_id, MAX(deployed_at) as latest
-        FROM deploys
-        GROUP BY site_id
-      ) latest ON d.site_id = latest.site_id AND d.deployed_at = latest.latest
-      INNER JOIN sites s ON s.id = d.site_id
-      WHERE s.user_id = ?
+      FROM sites s
+      JOIN deploys d ON d.id = s.active_deploy_id
+      WHERE s.user_id = ? AND s.status IN ('active', 'suspended')
     `)
     .bind(userId)
     .first<{ total: number }>();
@@ -63,7 +56,7 @@ router.get('/usage', async c => {
   });
 });
 
-router.get('/account', async c => {
+router.get('/account', authMiddleware, async c => {
   const { userId } = c.get('auth');
   const user = await c.env.DB
     .prepare('SELECT id, email, plan, created_at FROM users WHERE id = ?')

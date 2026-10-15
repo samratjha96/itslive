@@ -35,28 +35,81 @@ export async function unsuspendSites(env: Env, userId: string): Promise<void> {
 // changes so the serve worker picks up new session_ttl and plan fields promptly
 // rather than serving stale KV for up to 60s.
 async function invalidateAllSiteCaches(env: Env, userId: string): Promise<void> {
-  const sites = await env.DB
-    .prepare("SELECT name FROM sites WHERE user_id = ? AND status != 'deleted'")
-    .bind(userId)
-    .all<{ name: string }>();
-  await Promise.all((sites.results ?? []).map(s => env.KV.delete(`site:${s.name}`)));
+  try {
+    const sites = await env.DB
+      .prepare("SELECT name FROM sites WHERE user_id = ? AND status != 'deleted'")
+      .bind(userId)
+      .all<{ name: string }>();
+    const names = (sites.results ?? []).map(s => s.name);
+    const chunkSize = 50;
+    for (let i = 0; i < names.length; i += chunkSize) {
+      const chunk = names.slice(i, i + chunkSize);
+      await Promise.all(chunk.map(name => env.KV.delete(`site:${name}`).catch(() => {})));
+    }
+  } catch (err) {
+    console.warn(`plan: site KV cache invalidation failed for user ${userId}:`, err);
+  }
 }
 
-// Convenience wrapper: update users.plan, invalidate KV caches, and enforce
-// resource limits in one call. This is the single entry point for the Stripe
-// webhook handler — pass the new plan from Stripe's subscription object.
-export async function applyPlanChange(env: Env, userId: string, newPlan: keyof typeof PLAN_LIMITS): Promise<void> {
-  await env.DB
-    .prepare('UPDATE users SET plan = ? WHERE id = ?')
-    .bind(newPlan, userId)
-    .run();
+// Reconciles users.plan and site statuses atomically from billing_purchases,
+// or applies an explicit targetPlan when passed directly.
+export async function applyPlanChange(env: Env, userId: string, targetPlan?: keyof typeof PLAN_LIMITS): Promise<void> {
+  if (targetPlan) {
+    const limit = PLAN_LIMITS[targetPlan].sites;
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET plan = ? WHERE id = ?').bind(targetPlan, userId),
+      env.DB.prepare(
+        `UPDATE sites
+         SET status = CASE
+           WHEN id IN (
+             SELECT id FROM sites
+             WHERE user_id = ? AND status IN ('active', 'suspended')
+             ORDER BY created_at ASC, id ASC
+             LIMIT ?
+           ) THEN 'active'
+           ELSE 'suspended'
+         END
+         WHERE user_id = ? AND status IN ('active', 'suspended')`
+      ).bind(userId, limit, userId),
+    ]);
+  } else {
+    const proLimit = PLAN_LIMITS.pro.sites;
+    const freeLimit = PLAN_LIMITS.free.sites;
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE users
+         SET plan = CASE
+           WHEN EXISTS (
+             SELECT 1 FROM billing_purchases
+             WHERE user_id = ? AND paid = 1 AND refunded = 0 AND dispute_status IN ('none', 'won')
+           ) THEN 'pro'
+           ELSE 'free'
+         END
+         WHERE id = ?`
+      ).bind(userId, userId),
+      env.DB.prepare(
+        `UPDATE sites
+         SET status = CASE
+           WHEN id IN (
+             SELECT id FROM sites
+             WHERE user_id = ? AND status IN ('active', 'suspended')
+             ORDER BY created_at ASC, id ASC
+             LIMIT (
+               CASE
+                 WHEN (SELECT plan FROM users WHERE id = ?) = 'pro' THEN ?
+                 ELSE ?
+               END
+             )
+           ) THEN 'active'
+           ELSE 'suspended'
+         END
+         WHERE user_id = ? AND status IN ('active', 'suspended')`
+      ).bind(userId, userId, proLimit, freeLimit, userId),
+    ]);
+  }
 
-  // Purge API key and site KV caches so the new plan takes effect immediately
   await Promise.all([
     invalidateUserKeyCache(env, userId),
     invalidateAllSiteCaches(env, userId),
   ]);
-
-  // Enforce resource limits for the new plan
-  await suspendExcessSites(env, userId, newPlan);
 }

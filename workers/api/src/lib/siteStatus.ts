@@ -32,18 +32,26 @@ export async function restoreSite(env: StatusEnv, siteId: string, siteName: stri
   await invalidateKv(env.KV, siteName);
 }
 
+const D1_BATCH_CHUNK_SIZE = 50;
+
 export async function suspendSites(env: StatusEnv, sites: { id: string; name: string }[]): Promise<void> {
   if (sites.length === 0) return;
-  await env.DB.batch(
-    sites.map(s => env.DB.prepare("UPDATE sites SET status = 'suspended' WHERE id = ?").bind(s.id))
-  );
-  await Promise.all(sites.map(s => invalidateKv(env.KV, s.name)));
+  for (let i = 0; i < sites.length; i += D1_BATCH_CHUNK_SIZE) {
+    const chunk = sites.slice(i, i + D1_BATCH_CHUNK_SIZE);
+    await env.DB.batch(
+      chunk.map(s => env.DB.prepare("UPDATE sites SET status = 'suspended' WHERE id = ?").bind(s.id))
+    );
+    await Promise.all(chunk.map(s => invalidateKv(env.KV, s.name)));
+  }
 }
 
 export async function unsuspendSites(env: StatusEnv, sites: { id: string; name: string }[]): Promise<void> {
   if (sites.length === 0) return;
-  await env.DB.batch(
-    sites.map(s => env.DB.prepare("UPDATE sites SET status = 'active' WHERE id = ?").bind(s.id))
-  );
-  await Promise.all(sites.map(s => invalidateKv(env.KV, s.name)));
+  for (let i = 0; i < sites.length; i += D1_BATCH_CHUNK_SIZE) {
+    const chunk = sites.slice(i, i + D1_BATCH_CHUNK_SIZE);
+    await env.DB.batch(
+      chunk.map(s => env.DB.prepare("UPDATE sites SET status = 'active' WHERE id = ?").bind(s.id))
+    );
+    await Promise.all(chunk.map(s => invalidateKv(env.KV, s.name)));
+  }
 }
