@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { unzipSync } from 'fflate';
 import { sha256, sha256Bytes, hashPassword } from '../lib/crypto';
@@ -6,15 +6,24 @@ import { ulid } from '../lib/id';
 import { generateSlug, RESERVED_NAMES, SLUG_PATTERN } from '../lib/words';
 import { authMiddleware } from '../middleware/auth';
 import { deactivateSite, restoreSite } from '../lib/siteStatus';
-import type { Env, Site } from '../types';
+import type { Env, Plan, Site } from '../types';
 import { PLAN_LIMITS } from '../lib/limits';
 
 const router = new Hono<{ Bindings: Env }>();
 
 router.use('*', authMiddleware);
 
+type DeployFile = { path: string; body: Uint8Array; contentType: string };
+type ApiError = { status: 400 | 402 | 409 | 413; code: string; message: string };
+type ParsedDeployResult = { ok: true; files: DeployFile[]; totalSize: number } | { ok: false; error: ApiError };
+
 const CreateSiteSchema = z.object({
   name: z.string().optional(),
+  files: z.record(z.string(), z.string()).optional(),
+});
+
+const JsonDeploySchema = z.object({
+  files: z.record(z.string(), z.string()),
 });
 
 const AccessSchema = z.object({
@@ -26,12 +35,38 @@ const AccessSchema = z.object({
 
 router.post('/', async c => {
   const { userId, plan } = c.get('auth');
-  const body = await c.req.json().catch(() => ({}));
-  const parsed = CreateSiteSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: { code: 'INVALID_BODY', message: 'Invalid request body.' } }, 400);
+  const contentType = (c.req.header('Content-Type') ?? '').toLowerCase();
+  const isEmptyOrJson = !contentType || contentType.startsWith('application/json');
+
+  let requestedName: string | undefined;
+  let deployInput: ParsedDeployResult | null = null;
+
+  if (isEmptyOrJson) {
+    const rawText = await c.req.text();
+    const body = rawText.trim() ? safeJsonParse(rawText) : {};
+    const parsed = CreateSiteSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: { code: 'INVALID_BODY', message: 'Invalid request body.' } }, 400);
+    }
+    requestedName = parsed.data.name;
+    if (parsed.data.files !== undefined) {
+      deployInput = validateDeployFiles(filesFromJsonMap(parsed.data.files), plan);
+    }
+  } else {
+    requestedName = c.req.header('X-Site-Name') ?? undefined;
+    deployInput = await parseDeployPayload(c, plan);
   }
-  const { name: requestedName } = parsed.data;
+
+  if (deployInput && !deployInput.ok) {
+    return c.json({ error: { code: deployInput.error.code, message: deployInput.error.message } }, deployInput.error.status);
+  }
+
+  if (deployInput) {
+    const quotaErr = await checkMonthlyDeployQuota(c.env, userId, plan);
+    if (quotaErr) {
+      return c.json({ error: { code: quotaErr.code, message: quotaErr.message } }, quotaErr.status);
+    }
+  }
 
   let siteName: string;
   let slugType: 'auto' | 'custom';
@@ -106,6 +141,19 @@ router.post('/', async c => {
   }
 
   const url = siteUrl(c.env.SERVE_DOMAIN, siteName);
+
+  if (deployInput) {
+    const deployMeta = await executeDeploy(c, { id: siteId, user_id: userId, name: siteName, active_deploy_id: null }, deployInput.files, deployInput.totalSize);
+    return c.json({
+      site_id: siteId,
+      url,
+      slug_type: slugType,
+      name: siteName,
+      created_at: new Date(now).toISOString(),
+      ...deployMeta,
+    }, 201);
+  }
+
   return c.json({ site_id: siteId, url, slug_type: slugType, name: siteName, created_at: new Date(now).toISOString() }, 201);
 });
 
@@ -202,147 +250,19 @@ router.put('/:name', async c => {
     return c.json({ error: { code: 'SITE_NOT_FOUND', message: 'Site not found.' } }, 404);
   }
 
-  // Monthly deploy limit is per-user across all sites, not per-site.
-  // Excludes failed deploys — only attempts that consumed quota count.
-  const monthStart = new Date();
-  monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-  const monthDeployCount = await c.env.DB
-    .prepare(
-      `SELECT COUNT(*) as n FROM deploys d
-       JOIN sites s ON d.site_id = s.id
-       WHERE s.user_id = ? AND d.deployed_at >= ? AND d.status != 'failed'`
-    )
-    .bind(userId, monthStart.getTime())
-    .first<{ n: number }>();
-  const monthLimit = PLAN_LIMITS[plan].deploys_per_month;
-  if (monthLimit !== null && (monthDeployCount?.n ?? 0) >= monthLimit) {
-    return c.json({ error: { code: 'PLAN_LIMIT_REACHED', message: `Monthly deploy limit (${monthLimit}) reached.` } }, 402);
+  const quotaErr = await checkMonthlyDeployQuota(c.env, userId, plan);
+  if (quotaErr) {
+    return c.json({ error: { code: quotaErr.code, message: quotaErr.message } }, quotaErr.status);
   }
 
-  const cacheTtlHeader = c.req.header('X-Cache-TTL');
-  const cacheTtl = Math.min(86400, Math.max(30, Number(cacheTtlHeader ?? '300'))) || 300;
-
-  const contentType = c.req.header('Content-Type') ?? '';
-  const planSizeBytes = PLAN_LIMITS[plan].size_bytes;
-  const tooLarge = () => {
-    const mb = (planSizeBytes / (1024 * 1024)).toFixed(0);
-    return c.json({ error: { code: 'FILE_TOO_LARGE', message: `Total size exceeds ${mb}MB limit for ${plan} plan.` } }, 413);
-  };
-
-  // Reject obviously oversized requests before reading the body into memory.
-  // This covers raw HTML and multipart exactly, and ZIP by compressed size
-  // (a compressed file larger than the plan limit is always too big).
-  const contentLength = parseInt(c.req.header('Content-Length') ?? '', 10);
-  if (!isNaN(contentLength) && contentLength > planSizeBytes) {
-    return tooLarge();
+  const parsedDeploy = await parseDeployPayload(c, plan);
+  if (!parsedDeploy.ok) {
+    return c.json({ error: { code: parsedDeploy.error.code, message: parsedDeploy.error.message } }, parsedDeploy.error.status);
   }
 
-  const files: { path: string; body: Uint8Array; contentType: string }[] = [];
-
-  if (contentType.startsWith('application/zip') || contentType === 'application/octet-stream') {
-    const bytes = new Uint8Array(await c.req.arrayBuffer());
-
-    // Guard against ZIP bombs by reading declared uncompressed sizes from the
-    // ZIP central directory before decompressing. Prevents OOM in unzipSync.
-    const declaredSize = getZipDeclaredUncompressedSize(bytes);
-    if (declaredSize > planSizeBytes) {
-      return tooLarge();
-    }
-
-    let unzipped: Record<string, Uint8Array>;
-    try {
-      unzipped = unzipSync(bytes);
-    } catch {
-      return c.json({ error: { code: 'INVALID_ZIP', message: 'Could not parse ZIP archive.' } }, 400);
-    }
-    for (const [rawPath, data] of Object.entries(unzipped)) {
-      if (rawPath.endsWith('/')) continue; // skip directory entries
-      const safePath = sanitizePath(rawPath);
-      if (!safePath) continue;
-      files.push({ path: safePath, body: data, contentType: inferContentType(safePath) });
-    }
-  } else if (contentType.startsWith('multipart/form-data')) {
-    const form = await c.req.formData();
-    for (const [fieldName, value] of form.entries()) {
-      if (typeof value !== 'string' && 'arrayBuffer' in value) {
-        const file = value as Blob & { name?: string; type: string };
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const rawName = fieldName.includes('/') || fieldName.includes('.')
-          ? fieldName
-          : ((file as { name?: string }).name ?? 'index.html');
-        const safePath = sanitizePath(rawName);
-        if (!safePath) continue;
-        files.push({ path: safePath, body: bytes, contentType: file.type || inferContentType(safePath) });
-      }
-    }
-  } else {
-    const bytes = new Uint8Array(await c.req.arrayBuffer());
-    const { path, contentType: ct } = rawBodyFile(contentType);
-    files.push({ path, body: bytes, contentType: ct });
-  }
-
-  if (files.length === 0) {
-    return c.json({ error: { code: 'NO_FILES', message: 'No files provided.' } }, 400);
-  }
-  const hasHtml = files.some(f => f.contentType.startsWith('text/html'));
-  if (hasHtml && !files.some(f => f.path === 'index.html')) {
-    return c.json({ error: { code: 'ENTRYPOINT_MISSING', message: 'Deploy includes HTML files but no index.html entrypoint.' } }, 400);
-  }
-  if (files.length > 100) {
-    return c.json({ error: { code: 'TOO_MANY_FILES', message: 'Deploy cannot exceed 100 files.' } }, 400);
-  }
-
-  const totalSize = files.reduce((acc, f) => acc + f.body.byteLength, 0);
-  if (totalSize > planSizeBytes) {
-    return tooLarge();
-  }
-
-  const now = Date.now();
-  const deployId = ulid();
-  const objectPrefix = `sites/${userId}/${name}/${deployId}`;
-  const fileDigests = await Promise.all(
-    [...files]
-      .sort((a, b) => a.path.localeCompare(b.path))
-      .map(async f => `${f.path}:${await sha256Bytes(f.body)}`),
-  );
-  const deployHash = await sha256(fileDigests.join('|'));
-
-  // Insert deploy record as 'uploading' before touching R2.
-  // If R2 writes fail, the deploy stays 'uploading' and the old version remains live.
-  await c.env.DB
-    .prepare('INSERT INTO deploys (id, site_id, deployed_at, size_bytes, file_count, sha256, status, object_prefix, agent_ua) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(deployId, site.id, now, totalSize, files.length, deployHash, 'uploading', objectPrefix, c.req.header('User-Agent') ?? null)
-    .run();
-
-  for (const file of files) {
-    await c.env.SITES.put(`${objectPrefix}/${file.path}`, file.body, {
-      httpMetadata: {
-        contentType: file.contentType,
-        cacheControl: `public, max-age=${cacheTtl}`,
-      },
-      customMetadata: { deploy_id: deployId },
-    });
-  }
-
-  // Atomic flip: mark new deploy active, supersede old one, update site pointer
-  const flipStatements = [
-    c.env.DB.prepare("UPDATE deploys SET status = 'active' WHERE id = ?").bind(deployId),
-    c.env.DB.prepare('UPDATE sites SET deployed_at = ?, active_deploy_id = ? WHERE id = ?').bind(now, deployId, site.id),
-  ];
-  if (site.active_deploy_id) {
-    flipStatements.push(
-      c.env.DB.prepare("UPDATE deploys SET status = 'superseded' WHERE id = ?").bind(site.active_deploy_id)
-    );
-  }
-  await c.env.DB.batch(flipStatements);
-  await c.env.KV.delete(`site:${name}`);
-
-  if (site.active_deploy_id) {
-    await c.env.QUEUE.send({ type: 'deploy_cleanup', site_id: site.id, deploy_id: site.active_deploy_id });
-  }
-
+  const deployMeta = await executeDeploy(c, site, parsedDeploy.files, parsedDeploy.totalSize);
   const url = siteUrl(c.env.SERVE_DOMAIN, name);
-  return c.json({ url, deploy_id: deployId, deployed_at: new Date(now).toISOString(), size_bytes: totalSize, file_count: files.length, sha256: deployHash });
+  return c.json({ url, ...deployMeta });
 });
 
 // ── DELETE /sites/:name ───────────────────────────────────────────────────────
@@ -426,6 +346,208 @@ router.post('/:name/access/revoke', async c => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function safeJsonParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function filesFromJsonMap(fileMap: Record<string, string>): DeployFile[] | null {
+  const encoder = new TextEncoder();
+  const seen = new Set<string>();
+  const files: DeployFile[] = [];
+  for (const [rawPath, content] of Object.entries(fileMap)) {
+    const safePath = sanitizePath(rawPath);
+    if (!safePath || seen.has(safePath)) return null;
+    seen.add(safePath);
+    files.push({
+      path: safePath,
+      body: encoder.encode(content),
+      contentType: inferContentType(safePath),
+    });
+  }
+  return files;
+}
+
+function validateDeployFiles(files: DeployFile[] | null, plan: Plan): ParsedDeployResult {
+  if (!files) {
+    return { ok: false, error: { status: 400, code: 'INVALID_BODY', message: 'Invalid file path in deploy payload.' } };
+  }
+  if (files.length === 0) {
+    return { ok: false, error: { status: 400, code: 'NO_FILES', message: 'No files provided.' } };
+  }
+  const hasHtml = files.some(f => f.contentType.startsWith('text/html'));
+  if (hasHtml && !files.some(f => f.path === 'index.html')) {
+    return { ok: false, error: { status: 400, code: 'ENTRYPOINT_MISSING', message: 'Deploy includes HTML files but no index.html entrypoint.' } };
+  }
+  if (files.length > 100) {
+    return { ok: false, error: { status: 400, code: 'TOO_MANY_FILES', message: 'Deploy cannot exceed 100 files.' } };
+  }
+
+  const planSizeBytes = PLAN_LIMITS[plan].size_bytes;
+  const totalSize = files.reduce((acc, f) => acc + f.body.byteLength, 0);
+  if (totalSize > planSizeBytes) {
+    const mb = (planSizeBytes / (1024 * 1024)).toFixed(0);
+    return { ok: false, error: { status: 413, code: 'FILE_TOO_LARGE', message: `Total size exceeds ${mb}MB limit for ${plan} plan.` } };
+  }
+
+  return { ok: true, files, totalSize };
+}
+
+async function parseDeployPayload(c: Context<{ Bindings: Env }>, plan: Plan): Promise<ParsedDeployResult> {
+  const contentType = (c.req.header('Content-Type') ?? '').toLowerCase();
+  const planSizeBytes = PLAN_LIMITS[plan].size_bytes;
+  const tooLarge = (): ParsedDeployResult => {
+    const mb = (planSizeBytes / (1024 * 1024)).toFixed(0);
+    return { ok: false, error: { status: 413, code: 'FILE_TOO_LARGE', message: `Total size exceeds ${mb}MB limit for ${plan} plan.` } };
+  };
+
+  // Reject obviously oversized requests before reading the body into memory.
+  const contentLength = parseInt(c.req.header('Content-Length') ?? '', 10);
+  if (!isNaN(contentLength) && contentLength > planSizeBytes) {
+    return tooLarge();
+  }
+
+  if (contentType.startsWith('application/json')) {
+    const body = await c.req.json().catch(() => null);
+    const parsed = JsonDeploySchema.safeParse(body);
+    if (!parsed.success) {
+      return { ok: false, error: { status: 400, code: 'INVALID_BODY', message: 'JSON deploy requires {"files": {"index.html": "..."}}.' } };
+    }
+    return validateDeployFiles(filesFromJsonMap(parsed.data.files), plan);
+  }
+
+  const files: DeployFile[] = [];
+
+  if (contentType.startsWith('application/zip') || contentType === 'application/octet-stream') {
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const declaredSize = getZipDeclaredUncompressedSize(bytes);
+    if (declaredSize > planSizeBytes) {
+      return tooLarge();
+    }
+
+    let unzipped: Record<string, Uint8Array>;
+    try {
+      unzipped = unzipSync(bytes);
+    } catch {
+      return { ok: false, error: { status: 400, code: 'INVALID_ZIP', message: 'Could not parse ZIP archive.' } };
+    }
+    for (const [rawPath, data] of Object.entries(unzipped)) {
+      if (rawPath.endsWith('/')) continue;
+      const safePath = sanitizePath(rawPath);
+      if (!safePath) return { ok: false, error: { status: 400, code: 'INVALID_BODY', message: 'Invalid file path in ZIP archive.' } };
+      files.push({ path: safePath, body: data, contentType: inferContentType(safePath) });
+    }
+  } else if (contentType.startsWith('multipart/form-data')) {
+    const form = await c.req.formData();
+    for (const [fieldName, value] of form.entries()) {
+      if (typeof value !== 'string' && 'arrayBuffer' in value) {
+        const file = value as Blob & { name?: string; type: string };
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const rawName = fieldName.includes('/') || fieldName.includes('.')
+          ? fieldName
+          : ((file as { name?: string }).name ?? 'index.html');
+        const safePath = sanitizePath(rawName);
+        if (!safePath) return { ok: false, error: { status: 400, code: 'INVALID_BODY', message: 'Invalid file path in multipart upload.' } };
+        files.push({ path: safePath, body: bytes, contentType: file.type || inferContentType(safePath) });
+      }
+    }
+  } else {
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    if (bytes.byteLength === 0) {
+      return { ok: false, error: { status: 400, code: 'NO_FILES', message: 'No files provided.' } };
+    }
+    const { path, contentType: ct } = rawBodyFile(contentType);
+    files.push({ path, body: bytes, contentType: ct });
+  }
+
+  return validateDeployFiles(files, plan);
+}
+
+async function checkMonthlyDeployQuota(env: Env, userId: string, plan: Plan): Promise<ApiError | null> {
+  const monthLimit = PLAN_LIMITS[plan].deploys_per_month;
+  if (monthLimit === null) return null;
+
+  const monthStart = new Date();
+  monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  const monthDeployCount = await env.DB
+    .prepare(
+      `SELECT COUNT(*) as n FROM deploys d
+       JOIN sites s ON d.site_id = s.id
+       WHERE s.user_id = ? AND d.deployed_at >= ? AND d.status != 'failed'`
+    )
+    .bind(userId, monthStart.getTime())
+    .first<{ n: number }>();
+
+  if ((monthDeployCount?.n ?? 0) >= monthLimit) {
+    return { status: 402, code: 'PLAN_LIMIT_REACHED', message: `Monthly deploy limit (${monthLimit}) reached.` };
+  }
+  return null;
+}
+
+async function executeDeploy(
+  c: Context<{ Bindings: Env }>,
+  site: { id: string; user_id: string; name: string; active_deploy_id: string | null },
+  files: DeployFile[],
+  totalSize: number,
+) {
+  const cacheTtlHeader = c.req.header('X-Cache-TTL');
+  const cacheTtl = Math.min(86400, Math.max(30, Number(cacheTtlHeader ?? '300'))) || 300;
+  const now = Date.now();
+  const deployId = ulid();
+  const objectPrefix = `sites/${site.user_id}/${site.name}/${deployId}`;
+  const fileDigests = await Promise.all(
+    [...files]
+      .sort((a, b) => a.path.localeCompare(b.path))
+      .map(async f => `${f.path}:${await sha256Bytes(f.body)}`),
+  );
+  const deployHash = await sha256(fileDigests.join('|'));
+
+  // Insert deploy record as 'uploading' before touching R2.
+  // If R2 writes fail, the deploy stays 'uploading' and the old version remains live.
+  await c.env.DB
+    .prepare('INSERT INTO deploys (id, site_id, deployed_at, size_bytes, file_count, sha256, status, object_prefix, agent_ua) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(deployId, site.id, now, totalSize, files.length, deployHash, 'uploading', objectPrefix, c.req.header('User-Agent') ?? null)
+    .run();
+
+  for (const file of files) {
+    await c.env.SITES.put(`${objectPrefix}/${file.path}`, file.body, {
+      httpMetadata: {
+        contentType: file.contentType,
+        cacheControl: `public, max-age=${cacheTtl}`,
+      },
+      customMetadata: { deploy_id: deployId },
+    });
+  }
+
+  // Atomic flip: mark new deploy active, supersede old one, update site pointer
+  const flipStatements = [
+    c.env.DB.prepare("UPDATE deploys SET status = 'active' WHERE id = ?").bind(deployId),
+    c.env.DB.prepare('UPDATE sites SET deployed_at = ?, active_deploy_id = ? WHERE id = ?').bind(now, deployId, site.id),
+  ];
+  if (site.active_deploy_id) {
+    flipStatements.push(
+      c.env.DB.prepare("UPDATE deploys SET status = 'superseded' WHERE id = ?").bind(site.active_deploy_id)
+    );
+  }
+  await c.env.DB.batch(flipStatements);
+  await c.env.KV.delete(`site:${site.name}`);
+
+  if (site.active_deploy_id) {
+    await c.env.QUEUE.send({ type: 'deploy_cleanup', site_id: site.id, deploy_id: site.active_deploy_id });
+  }
+
+  return {
+    deploy_id: deployId,
+    deployed_at: new Date(now).toISOString(),
+    size_bytes: totalSize,
+    file_count: files.length,
+    sha256: deployHash,
+  };
+}
+
 function siteUrl(domain: string, name: string): string {
   return `https://${name}.${domain}`;
 }
@@ -494,17 +616,15 @@ function rawBodyFile(mimeType: string): { path: string; contentType: string } {
   return { path: 'index.html', contentType: 'text/html; charset=utf-8' };
 }
 
-// Sanitize uploaded file paths — prevent path traversal
 function sanitizePath(rawPath: string): string | null {
-  // Strip leading slashes and resolve ..
   const parts = rawPath.replace(/\\/g, '/').split('/').filter(Boolean);
   const safe: string[] = [];
   for (const part of parts) {
-    if (part === '..') return null; // Reject any path traversal attempt
+    if (part === '..') return null;
     if (part === '.') continue;
     safe.push(part);
   }
-  if (safe.length === 0) return 'index.html';
+  if (safe.length === 0) return null;
   return safe.join('/');
 }
 

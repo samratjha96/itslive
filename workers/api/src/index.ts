@@ -10,7 +10,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'X-API-Key', 'X-Cache-TTL'],
+  allowHeaders: ['Content-Type', 'X-API-Key', 'X-Cache-TTL', 'X-Site-Name'],
 }));
 
 app.get('/', c => c.json({ name: 'ItsLive API', version: '1.0.0', status: 'ok' }));
@@ -66,21 +66,15 @@ The old key stays valid for 60 seconds so in-flight requests complete.
 STEP 2 — DEPLOY A SITE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-2a. Create a site:
+One-step create + deploy (recommended for new sites):
     POST /sites
     X-API-Key: il_live_...
-    {}
-    → 201 {"name": "violet-crane-42", "url": "https://violet-crane-42.itslive.fyi",
-           "site_id": "...", "slug_type": "auto", "created_at": "..."}
 
-    Custom name (Builder plan+): {"name": "my-project"}
-    Rules: 3–40 chars, lowercase alphanumeric and hyphens only.
+    Option A — JSON file map:
+      Content-Type: application/json
+      {"files": {"index.html": "<!doctype html>...", "style.css": "..."}}
 
-2b. Upload content (site goes live immediately on success):
-    PUT /sites/{name}
-    X-API-Key: il_live_...
-
-    Option A — Single file (raw body):
+    Option B — Single file (raw body):
       Content-Type: text/html         → saved as index.html
       Content-Type: image/gif         → saved as image.gif
       Content-Type: image/png         → saved as image.png
@@ -91,23 +85,30 @@ STEP 2 — DEPLOY A SITE
       Content-Type: application/pdf   → saved as document.pdf
       <file bytes>
 
-    Option B — ZIP archive:
-      Content-Type: application/zip
-      <zip bytes>
-      Note: index.html required at root only when ZIP contains HTML files.
+    Option C — ZIP archive or multipart form:
+      Content-Type: application/zip | multipart/form-data
 
-    Option C — Multipart form:
-      Content-Type: multipart/form-data
-      <files as form fields>
+    → 201 {"name": "violet-crane-42", "url": "https://violet-crane-42.itslive.fyi",
+           "site_id": "...", "slug_type": "auto", "created_at": "...",
+           "deploy_id": "...", "deployed_at": "...", "size_bytes": ...,
+           "file_count": ..., "sha256": "..."}
 
+    Custom name (Builder plan+): pass "name": "my-project" in JSON or X-Site-Name header.
+    Rules: 3–40 chars, lowercase alphanumeric and hyphens only.
+
+    (You can also create an empty site first with POST /sites {} and deploy in a separate step.)
+
+Update an existing site (or deploy after empty POST /sites):
+    PUT /sites/{name}
+    X-API-Key: il_live_...
+    Accepts the same payloads (JSON {"files": {...}}, raw file body, ZIP, or multipart).
     → {"url": "...", "deploy_id": "...", "deployed_at": "...",
        "size_bytes": ..., "file_count": ..., "sha256": "..."}
 
-2c. Show the user the live URL.
-    For HTML sites: root URL (https://{name}.itslive.fyi/) serves the page.
-    For media files: access by direct path (https://{name}.itslive.fyi/image.gif).
+Show the user the live URL.
+For HTML sites: root URL (https://{name}.itslive.fyi/) serves the page.
+For media files: access by direct path (https://{name}.itslive.fyi/image.gif).
 
-To update: repeat step 2b with the same name.
 Deploys are atomic — old version stays live until new upload completes.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

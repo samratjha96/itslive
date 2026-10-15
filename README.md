@@ -35,19 +35,19 @@ curl -X POST https://api.itslive.fyi/verify \
   -d '{"email": "you@example.com", "code": "ABC123"}'
 # → {"api_key": "il_live_..."}
 
-# 2. Create a site
+# 2. Deploy a site in one call (or pass {"files": {"index.html": "..."}} as JSON)
 curl -X POST https://api.itslive.fyi/sites \
   -H "X-API-Key: il_live_..." \
-  -H "Content-Type: application/json" \
-  -d '{}'
-# → {"name": "violet-crane-42", "url": "https://.../violet-crane-42"}
+  -H "Content-Type: text/html" \
+  --data-binary @index.html
+# → {"name": "violet-crane-42", "url": "https://violet-crane-42.itslive.fyi", "deploy_id": "..."}
 
-# 3. Deploy
+# 3. Update an existing site
 curl -X PUT https://api.itslive.fyi/sites/violet-crane-42 \
   -H "X-API-Key: il_live_..." \
   -H "Content-Type: text/html" \
   --data-binary @index.html
-# → Site is live.
+# → Site is updated atomically.
 ```
 
 **Idea to live URL in under a minute.**
@@ -103,9 +103,9 @@ Full agent-executable instructions at [`/llms.txt`](https://api.itslive.fyi/llms
 | `POST` | `/verify` | — | Verify code, receive API key |
 | `POST` | `/keys/rotate` | ✓ | Rotate API key (old key valid 60s) |
 | `GET` | `/sites` | ✓ | List your sites |
-| `POST` | `/sites` | ✓ | Create a site |
+| `POST` | `/sites` | ✓ | Create a site (and optionally deploy files in one step) |
 | `GET` | `/sites/:name` | ✓ | Site details + last 5 deploys |
-| `PUT` | `/sites/:name` | ✓ | Deploy files (HTML, ZIP, multipart) |
+| `PUT` | `/sites/:name` | ✓ | Deploy files (JSON file map, HTML, ZIP, multipart) |
 | `DELETE` | `/sites/:name` | ✓ | Delete site (30-day cooling period) |
 | `PUT` | `/sites/:name/access` | ✓ | Enable password protection |
 | `DELETE` | `/sites/:name/access` | ✓ | Remove password protection |
@@ -116,6 +116,12 @@ Full agent-executable instructions at [`/llms.txt`](https://api.itslive.fyi/llms
 ### Deploy formats
 
 ```bash
+# Multi-file JSON map (create + deploy in one call via POST /sites, or update via PUT /sites/my-site)
+curl -X POST https://api.itslive.fyi/sites \
+  -H "X-API-Key: ..." \
+  -H "Content-Type: application/json" \
+  -d '{"files": {"index.html": "<!doctype html><h1>Hello</h1>", "style.css": "body{margin:0}"}}'
+
 # Single HTML file
 curl -X PUT .../sites/my-site \
   -H "X-API-Key: ..." \
