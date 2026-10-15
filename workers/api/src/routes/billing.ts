@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth';
-import { verifyStripeSignature } from '../lib/crypto';
+import { sha256, verifyStripeSignature } from '../lib/crypto';
 import { ulid } from '../lib/id';
 import { applyPlanChange, type Plan } from '../lib/plan';
 import type { Env } from '../types';
@@ -113,6 +113,7 @@ router.post('/billing/checkout', authMiddleware, async c => {
   const baseUrl = `https://${c.env.SERVE_DOMAIN}`;
   const params: Record<string, string> = {
     mode: 'payment',
+    allow_promotion_codes: 'true',
     'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': PRO_PRICE_CENTS,
     'line_items[0][price_data][product_data][name]': 'ItsLive Pro (Lifetime)',
@@ -148,6 +149,42 @@ router.post('/billing/checkout', authMiddleware, async c => {
   return c.json({ checkout_url: session.url, session_id: session.id });
 });
 
+router.get('/billing/checkout', async c => {
+  const secretKey = c.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    return c.json({ error: { code: 'BILLING_UNAVAILABLE', message: 'Billing is not configured.' } }, 503);
+  }
+
+  // Per-IP rate limit (20 checkouts / 10 min)
+  const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+  const ipWindow = Math.floor(Date.now() / (600 * 1000));
+  const ipKey = `web_checkout_ip:${await sha256(ip)}:${ipWindow}`;
+  const ipCount = Number(await c.env.KV.get(ipKey) ?? '0');
+  if (ipCount >= 20) {
+    return c.json({ error: { code: 'RATE_LIMITED', message: 'Too many checkout attempts. Try again later.' } }, 429);
+  }
+  await c.env.KV.put(ipKey, String(ipCount + 1), { expirationTtl: 600 });
+
+  const baseUrl = `https://${c.env.SERVE_DOMAIN}`;
+  const expiresAt = Math.floor(Date.now() / 1000) + CHECKOUT_LIFETIME_SECS;
+  const params: Record<string, string> = {
+    mode: 'payment',
+    allow_promotion_codes: 'true',
+    customer_creation: 'always',
+    'line_items[0][price_data][currency]': 'usd',
+    'line_items[0][price_data][unit_amount]': PRO_PRICE_CENTS,
+    'line_items[0][price_data][product_data][name]': 'ItsLive Pro (Lifetime)',
+    'line_items[0][price_data][product_data][description]': '500 sites, 25 MB per deploy, custom site names, unlimited deploys',
+    'line_items[0][quantity]': '1',
+    expires_at: String(expiresAt),
+    success_url: `${baseUrl}/?upgraded=1`,
+    cancel_url: `${baseUrl}/#pricing`,
+  };
+
+  const session = await stripePost<{ id: string; url: string }>(secretKey, '/checkout/sessions', params);
+  return c.redirect(session.url, 303);
+});
+
 interface StripeWebhookEvent {
   id: string;
   type: string;
@@ -155,6 +192,8 @@ interface StripeWebhookEvent {
     object: {
       id?: string;
       customer?: string | null;
+      customer_email?: string | null;
+      customer_details?: { email?: string | null } | null;
       client_reference_id?: string | null;
       payment_intent?: string | null;
       payment_status?: string;
@@ -209,6 +248,7 @@ router.post('/webhooks/stripe', async c => {
   const customerId = typeof obj.customer === 'string' ? obj.customer : null;
   const paymentIntentId = typeof obj.payment_intent === 'string' ? obj.payment_intent : null;
   const metadataUserId = obj.metadata?.user_id ?? obj.client_reference_id ?? null;
+  const checkoutEmail = (obj.customer_details?.email ?? obj.customer_email ?? null)?.trim().toLowerCase() ?? null;
 
   switch (event.type) {
     case 'checkout.session.completed':
@@ -216,7 +256,7 @@ router.post('/webhooks/stripe', async c => {
       if (event.type === 'checkout.session.completed' && obj.payment_status !== 'paid') {
         break;
       }
-      const userId = await resolveWebhookUserId(c.env, metadataUserId, customerId, paymentIntentId);
+      const userId = await resolveOrCreateWebhookUser(c.env, metadataUserId, customerId, paymentIntentId, checkoutEmail);
       if (!userId) break;
 
       const piKey = paymentIntentId ?? obj.id ?? event.id;
@@ -352,6 +392,38 @@ async function getPurchaseUserId(env: Env, piKey: string): Promise<string | null
 // Recomputes user's effective plan and site statuses atomically from billing_purchases.
 async function reconcileUserEntitlement(env: Env, userId: string): Promise<void> {
   await applyPlanChange(env, userId);
+}
+
+async function resolveOrCreateWebhookUser(
+  env: Env,
+  metadataUserId: string | null,
+  customerId: string | null,
+  paymentIntentId: string | null,
+  email: string | null,
+): Promise<string | null> {
+  const existingId = await resolveWebhookUserId(env, metadataUserId, customerId, paymentIntentId);
+  if (existingId) return existingId;
+
+  if (!email) return null;
+
+  const byEmail = await env.DB
+    .prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ id: string }>();
+  if (byEmail?.id) return byEmail.id;
+
+  const newUserId = ulid();
+  const now = Date.now();
+  await env.DB
+    .prepare('INSERT OR IGNORE INTO users (id, email, plan, created_at, stripe_id) VALUES (?, ?, ?, ?, ?)')
+    .bind(newUserId, email, 'pro', now, customerId)
+    .run();
+
+  const created = await env.DB
+    .prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ id: string }>();
+  return created?.id ?? null;
 }
 
 async function resolveWebhookUserId(

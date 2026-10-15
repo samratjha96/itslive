@@ -626,10 +626,33 @@
       opacity: 0.45; cursor: default; pointer-events: none;
       background: transparent; color: var(--muted);
     }
+    .plan-actions {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .plan-cta { cursor: pointer; }
+    .pro-agent-box {
+      display: none; margin-top: 14px;
+      border: 1.5px solid var(--border); background: #fff;
+    }
+    .pro-agent-box.open { display: block; }
+    .pro-agent-header {
+      padding: 8px 12px; background: var(--surface);
+      border-bottom: 1px solid rgba(17,16,8,.15);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .pro-agent-label {
+      font-family: var(--mono); font-size: 10px; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+    }
+    .pro-agent-body {
+      padding: 12px 14px; font-family: var(--mono); font-size: 12px;
+      line-height: 1.65; color: var(--text); white-space: pre-wrap;
+    }
     @media (max-width: 900px) {
       .pricing-grid { grid-template-columns: 1fr; }
       .pricing-plan { border-right: none; border-bottom: 2px solid var(--border); }
       .pricing-plan:last-child { border-bottom: none; }
+      .plan-actions { grid-template-columns: 1fr; }
     }
 
     /* API */
@@ -1083,9 +1106,23 @@ Follow the onboarding steps in the docs. Ask me for the verification code when p
         <li>Password protection (up to 30-day sessions)</li>
         <li>Custom site names</li>
         <li>Search engine indexing enabled</li>
-        <li>Upgrade via API (<code style="font-family:var(--mono);font-size:12px">POST /billing/checkout</code>)</li>
       </ul>
-      <a class="plan-cta outline" href="#getting-started">Ask your AI to upgrade</a>
+      <div class="plan-actions">
+        <a class="plan-cta filled" data-api-path="/billing/checkout">Buy Pro — $10</a>
+        <button type="button" class="plan-cta outline" onclick="toggleProPrompt()">Ask your AI to upgrade</button>
+      </div>
+      <div class="pro-agent-box" id="pro-agent-box">
+        <div class="pro-agent-header">
+          <span class="pro-agent-label">Tell your agent</span>
+          <button type="button" class="copy-btn" onclick="copyTextById('pro-prompt-text', this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy
+          </button>
+        </div>
+        <div class="pro-agent-body" id="pro-prompt-text">Upgrade my ItsLive account to Pro ($10 one-time). Call POST https://api.itslive.fyi/billing/checkout with my X-API-Key (see https://itslive.fyi/llms.txt if you need to sign me in first) and send me the checkout link.</div>
+      </div>
     </div>
   </div>
 </section>
@@ -1163,14 +1200,23 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-function copyPrompt(btn) {
-  const text = document.getElementById('prompt-text').innerText;
+function copyTextById(id, btn) {
+  const text = document.getElementById(id).innerText;
   navigator.clipboard.writeText(text).then(() => {
     btn.textContent = '✓ Copied';
     setTimeout(() => {
       btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy';
     }, 2000);
   });
+}
+
+function copyPrompt(btn) {
+  copyTextById('prompt-text', btn);
+}
+
+function toggleProPrompt() {
+  const box = document.getElementById('pro-agent-box');
+  box.classList.toggle('open');
 }
 </script>
 </body>
