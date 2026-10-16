@@ -45,6 +45,10 @@
     {
       "pattern": "api.itslive.fyi",
       "custom_domain": true
+    },
+    {
+      "pattern": "api.itslive.fyi/*",
+      "zone_name": "itslive.fyi"
     }
   ]
 
