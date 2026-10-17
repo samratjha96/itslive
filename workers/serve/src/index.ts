@@ -43,20 +43,16 @@ export default {
     const url = new URL(request.url);
     const host = request.headers.get('Host') ?? url.hostname;
 
-    // Apex domain or unrecognised host — serve landing page assets from bundled Workers Assets
+    // Apex domain or unrecognised host — serve static landing assets, redirect any other path to /llms.txt
     if (host === SERVE_DOMAIN || !host.endsWith('.' + SERVE_DOMAIN)) {
-      if (url.pathname === '/llms.txt') {
-        return fetch('https://api.itslive.fyi/llms.txt');
+      const LANDING_PATHS = new Set(['/', '/index.html', '/favicon.svg', '/og-image.png', '/robots.txt', '/sitemap.xml']);
+      if (!LANDING_PATHS.has(url.pathname)) {
+        return Response.redirect('https://api.itslive.fyi/llms.txt', 302);
       }
-      const assetUrl = new URL(request.url);
-      const allowedPaths = new Set(['/', '/index.html', '/favicon.svg', '/og-image.png', '/robots.txt', '/sitemap.xml']);
-      if (!allowedPaths.has(assetUrl.pathname)) {
-        assetUrl.pathname = '/index.html';
-      }
-      const assetResp = await env.ASSETS.fetch(new Request(assetUrl.toString(), request));
+      const assetResp = await env.ASSETS.fetch(request);
       const headers = new Headers(assetResp.headers);
       headers.set('Cache-Control', 'public, max-age=300');
-      headers.set('Link', '<https://itslive.fyi/llms.txt>; rel="llms-txt"');
+      headers.set('Link', '<https://api.itslive.fyi/llms.txt>; rel="llms-txt"');
       return new Response(assetResp.body, { status: assetResp.status, headers });
     }
 

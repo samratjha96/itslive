@@ -82,26 +82,60 @@ router.post('/', async c => {
       return c.json({ error: { code: 'NAME_RESERVED', message: 'This name is reserved.' } }, 409);
     }
     const existing = await c.env.DB
-      .prepare("SELECT id, user_id, status, cooling_until FROM sites WHERE name = ? AND status != 'deleted'")
+      .prepare('SELECT id, user_id, status, cooling_until FROM sites WHERE name = ?')
       .bind(requestedName)
       .first<{ id: string; user_id: string; status: string; cooling_until: number | null }>();
 
     if (existing) {
-      if (existing.status !== 'deleted_cooling') {
+      const canPurgeSiteRow =
+        existing.status === 'deleted' ||
+        (existing.status === 'deleted_cooling' && existing.user_id !== userId && (existing.cooling_until ?? Infinity) <= Date.now());
+
+      if (canPurgeSiteRow) {
+        const [, delRes] = await c.env.DB.batch([
+          c.env.DB
+            .prepare(
+              `UPDATE sites SET active_deploy_id = NULL
+               WHERE id = ? AND NOT EXISTS (SELECT 1 FROM deploys WHERE site_id = sites.id AND object_prefix IS NOT NULL)`
+            )
+            .bind(existing.id),
+          c.env.DB
+            .prepare(
+              `DELETE FROM sites
+               WHERE id = ? AND status IN ('deleted', 'deleted_cooling')
+                 AND NOT EXISTS (SELECT 1 FROM deploys WHERE site_id = sites.id AND object_prefix IS NOT NULL)`
+            )
+            .bind(existing.id),
+        ]);
+        if (delRes.meta.changes === 0) {
+          return c.json({ error: { code: 'NAME_TAKEN', message: 'This name is temporarily unavailable.' } }, 409);
+        }
+      } else if (existing.status !== 'deleted_cooling') {
         return c.json({ error: { code: 'NAME_TAKEN', message: 'This site name is already taken.' } }, 409);
-      }
-      if (existing.user_id === userId) {
+      } else if (existing.user_id === userId && (existing.cooling_until ?? Infinity) > Date.now()) {
         return c.json({ error: { code: 'SITE_IN_COOLING', message: 'This site is in its cooling-off period. Wait for it to fully expire before reusing the name.' } }, 409);
-      }
-      if ((existing.cooling_until ?? Infinity) > Date.now()) {
+      } else if (existing.user_id === userId) {
+        const [, delRes] = await c.env.DB.batch([
+          c.env.DB
+            .prepare(
+              `UPDATE sites SET active_deploy_id = NULL
+               WHERE id = ? AND NOT EXISTS (SELECT 1 FROM deploys WHERE site_id = sites.id AND object_prefix IS NOT NULL)`
+            )
+            .bind(existing.id),
+          c.env.DB
+            .prepare(
+              `DELETE FROM sites
+               WHERE id = ? AND status = 'deleted_cooling' AND cooling_until <= ?
+                 AND NOT EXISTS (SELECT 1 FROM deploys WHERE site_id = sites.id AND object_prefix IS NOT NULL)`
+            )
+            .bind(existing.id, Date.now()),
+        ]);
+        if (delRes.meta.changes === 0) {
+          return c.json({ error: { code: 'NAME_TAKEN', message: 'This name is temporarily unavailable.' } }, 409);
+        }
+      } else {
         return c.json({ error: { code: 'NAME_TAKEN', message: 'This name is temporarily unavailable.' } }, 409);
       }
-      // Expired cooling — flip to deleted so INSERT can proceed.
-      // UNIQUE constraint on name handles concurrent races via the catch block below.
-      await c.env.DB
-        .prepare("UPDATE sites SET status = 'deleted' WHERE id = ? AND status = 'deleted_cooling'")
-        .bind(existing.id)
-        .run();
     }
     siteName = requestedName;
     slugType = 'custom';
@@ -230,7 +264,10 @@ router.post('/:name/restore', async c => {
     return c.json({ error: { code: 'SITE_NOT_RESTORABLE', message: 'Site not found, already purged, or not in a deactivated state.' } }, 404);
   }
 
-  await restoreSite(c.env, site.id, name);
+  const restored = await restoreSite(c.env, site.id, name);
+  if (!restored) {
+    return c.json({ error: { code: 'SITE_NOT_RESTORABLE', message: 'Site not found, already purged, or not in a deactivated state.' } }, 404);
+  }
   return c.json({ restored: true, url: siteUrl(c.env.SERVE_DOMAIN, name) });
 });
 
@@ -522,17 +559,30 @@ async function executeDeploy(
     });
   }
 
-  // Atomic flip: mark new deploy active, supersede old one, update site pointer
+  // Atomic flip: mark new deploy active (only if still 'uploading'), supersede old one, update site pointer
   const flipStatements = [
-    c.env.DB.prepare("UPDATE deploys SET status = 'active' WHERE id = ?").bind(deployId),
-    c.env.DB.prepare('UPDATE sites SET deployed_at = ?, active_deploy_id = ? WHERE id = ?').bind(now, deployId, site.id),
+    c.env.DB.prepare("UPDATE deploys SET status = 'active' WHERE id = ? AND status = 'uploading'").bind(deployId),
+    c.env.DB
+      .prepare(
+        `UPDATE sites SET deployed_at = ?, active_deploy_id = ?
+         WHERE id = ? AND EXISTS (SELECT 1 FROM deploys WHERE id = ? AND status = 'active')`
+      )
+      .bind(now, deployId, site.id, deployId),
   ];
   if (site.active_deploy_id) {
     flipStatements.push(
-      c.env.DB.prepare("UPDATE deploys SET status = 'superseded' WHERE id = ?").bind(site.active_deploy_id)
+      c.env.DB
+        .prepare(
+          `UPDATE deploys SET status = 'superseded'
+           WHERE id = ? AND EXISTS (SELECT 1 FROM deploys WHERE id = ? AND status = 'active')`
+        )
+        .bind(site.active_deploy_id, deployId),
     );
   }
-  await c.env.DB.batch(flipStatements);
+  const batchResults = await c.env.DB.batch(flipStatements);
+  if (batchResults[0]?.meta.changes === 0) {
+    throw new Error('DEPLOY_EXPIRED');
+  }
   await c.env.KV.delete(`site:${site.name}`);
 
   if (site.active_deploy_id) {
@@ -569,9 +619,31 @@ async function generateUniqueSlug(env: Env): Promise<string> {
     if (locked) continue;
 
     const taken = await env.DB
-      .prepare("SELECT id FROM sites WHERE name = ? AND status != 'deleted'")
+      .prepare('SELECT id, status FROM sites WHERE name = ?')
       .bind(slug)
-      .first();
+      .first<{ id: string; status: string }>();
+    if (taken?.status === 'deleted') {
+      const [, delRes] = await env.DB.batch([
+        env.DB
+          .prepare(
+            `UPDATE sites SET active_deploy_id = NULL
+             WHERE id = ? AND NOT EXISTS (SELECT 1 FROM deploys WHERE site_id = sites.id AND object_prefix IS NOT NULL)`
+          )
+          .bind(taken.id),
+        env.DB
+          .prepare(
+            `DELETE FROM sites
+             WHERE id = ? AND status = 'deleted'
+               AND NOT EXISTS (SELECT 1 FROM deploys WHERE site_id = sites.id AND object_prefix IS NOT NULL)`
+          )
+          .bind(taken.id),
+      ]);
+      if (delRes.meta.changes > 0) {
+        await env.KV.put(lockKey, '1', { expirationTtl: 60 });
+        return slug;
+      }
+      continue;
+    }
     if (!taken) {
       // KV minimum TTL is 60s. Lock briefly to prevent concurrent slug collisions.
       await env.KV.put(lockKey, '1', { expirationTtl: 60 });

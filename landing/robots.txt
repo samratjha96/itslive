@@ -2,3 +2,5 @@ User-agent: *
 Allow: /
 
 Sitemap: https://itslive.fyi/sitemap.xml
+# AI Agent API Specification: https://itslive.fyi/llms.txt
+

@@ -49,36 +49,70 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 // ── Anti-entropy cron ─────────────────────────────────────────────────────────
+// Run steps sequentially to keep D1/R2/KV subrequest counts bounded and avoid
+// overlapping R2 prefix deletes on the same site.
 
 async function runAntiEntropy(env: Env): Promise<void> {
-  await Promise.allSettled([
-    expireCoolingSites(env),
-    reapDeactivatedSites(env),
-    cleanupSupersededDeploys(env),
-    expireStuckDeploys(env),
-  ]);
-}
+  const steps: [string, () => Promise<void>][] = [
+    ['reapDeactivatedSites', () => reapDeactivatedSites(env)],
+    ['expireStuckDeploys', () => expireStuckDeploys(env)],
+    ['cleanupOrphanedDeploys', () => cleanupOrphanedDeploys(env)],
+    ['expireCoolingSites', () => expireCoolingSites(env)],
+    ['cleanupBillingTables', () => cleanupBillingTables(env)],
+  ];
 
-// Flip sites that have passed their cooling window to 'deleted'.
-async function expireCoolingSites(env: Env): Promise<void> {
-  const now = Date.now();
-  const result = await env.DB
-    .prepare("UPDATE sites SET status = 'deleted' WHERE status = 'deleted_cooling' AND cooling_until <= ?")
-    .bind(now)
-    .run();
-  if (result.meta.changes > 0) {
-    console.log(`[anti-entropy] expired ${result.meta.changes} cooling site(s)`);
+  for (const [name, fn] of steps) {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`[anti-entropy] ${name} failed:`, err);
+    }
   }
 }
 
-// Purge R2 files for deactivated sites whose 7-day restore window has passed,
-// then transition them into the 30-day name-squatting cooling window.
+// Delete sites that have passed their 30-day cooling window (and any legacy
+// rows with status = 'deleted') once all of their R2 deploy prefixes have been
+// purged, freeing UNIQUE(name) for reuse.
+async function expireCoolingSites(env: Env): Promise<void> {
+  const now = Date.now();
+  const [, deleteRes] = await env.DB.batch([
+    env.DB
+      .prepare(
+        `UPDATE sites SET active_deploy_id = NULL
+         WHERE (status = 'deleted' OR (status = 'deleted_cooling' AND cooling_until <= ?))
+           AND NOT EXISTS (SELECT 1 FROM deploys WHERE site_id = sites.id AND object_prefix IS NOT NULL)`
+      )
+      .bind(now),
+    env.DB
+      .prepare(
+        `DELETE FROM sites
+         WHERE (status = 'deleted' OR (status = 'deleted_cooling' AND cooling_until <= ?))
+           AND NOT EXISTS (SELECT 1 FROM deploys WHERE site_id = sites.id AND object_prefix IS NOT NULL)`
+      )
+      .bind(now),
+  ]);
+  if (deleteRes.meta.changes > 0) {
+    console.log(`[anti-entropy] purged ${deleteRes.meta.changes} expired cooling site(s)`);
+  }
+}
+
+// Transition deactivated sites whose 7-day restore window has passed into the
+// 30-day name-squatting cooling window FIRST (preventing a concurrent restore
+// race), then purge their R2 files and clear deploy object prefixes. Also sweeps
+// any deleted/deleted_cooling sites whose previous R2 cleanup failed mid-way.
 async function reapDeactivatedSites(env: Env): Promise<void> {
   const now = Date.now();
   const rows = await env.DB
-    .prepare("SELECT id, user_id, name FROM sites WHERE status = 'deactivated' AND cooling_until <= ? LIMIT 50")
+    .prepare(
+      `SELECT id, user_id, name, status FROM sites
+       WHERE (status = 'deactivated' AND cooling_until <= ?)
+          OR (status IN ('deleted_cooling', 'deleted')
+              AND EXISTS (SELECT 1 FROM deploys WHERE site_id = sites.id AND object_prefix IS NOT NULL))
+       ORDER BY cooling_until ASC
+       LIMIT 25`
+    )
     .bind(now)
-    .all<{ id: string; user_id: string; name: string }>();
+    .all<{ id: string; user_id: string; name: string; status: string }>();
 
   if (!rows.results?.length) return;
 
@@ -86,28 +120,62 @@ async function reapDeactivatedSites(env: Env): Promise<void> {
   let reaped = 0;
   for (const site of rows.results) {
     try {
+      if (site.status === 'deactivated') {
+        const claim = await env.DB
+          .prepare(
+            `UPDATE sites
+             SET status = 'deleted_cooling', active_deploy_id = NULL, cooling_until = ?
+             WHERE id = ? AND status = 'deactivated' AND cooling_until <= ?`
+          )
+          .bind(coolingUntil, site.id, now)
+          .run();
+
+        // If 0 rows changed, the user restored the site concurrently — do not touch R2.
+        if (claim.meta.changes === 0) continue;
+      }
+
+      await env.KV.delete(`site:${site.name}`).catch(() => {});
       await deleteSiteFiles(env, site.user_id, site.name);
       await env.DB
-        .prepare("UPDATE sites SET status = 'deleted_cooling', cooling_until = ? WHERE id = ? AND status = 'deactivated'")
-        .bind(coolingUntil, site.id)
+        .prepare('UPDATE deploys SET object_prefix = NULL WHERE site_id = ?')
+        .bind(site.id)
         .run();
       reaped++;
     } catch (err) {
-      console.error(`[anti-entropy] failed to reap deactivated site ${site.id}:`, err);
+      console.error(`[anti-entropy] failed to reap site ${site.id}:`, err);
     }
   }
 
   if (reaped > 0) {
-    console.log(`[anti-entropy] reaped ${reaped} deactivated site(s) into cooling`);
+    console.log(`[anti-entropy] reaped ${reaped} site(s) into cooling`);
   }
 }
 
-// Delete R2 objects for superseded deploys whose cleanup was queued but never
-// executed (e.g. queue message lost), then null out object_prefix so we don't
-// re-process them. Works in a single page; re-runs tomorrow catch any remainder.
-async function cleanupSupersededDeploys(env: Env): Promise<void> {
+// Mark deploys that got stuck in 'uploading' for over an hour as failed so
+// cleanupOrphanedDeploys purges any partial R2 objects they wrote.
+async function expireStuckDeploys(env: Env): Promise<void> {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  const result = await env.DB
+    .prepare("UPDATE deploys SET status = 'failed' WHERE status = 'uploading' AND deployed_at <= ?")
+    .bind(cutoff)
+    .run();
+  if (result.meta.changes > 0) {
+    console.log(`[anti-entropy] expired ${result.meta.changes} stuck deploy(s)`);
+  }
+}
+
+// Delete R2 objects for superseded or failed deploys on active/suspended/deactivated
+// sites, then null out object_prefix so they are not re-scanned.
+async function cleanupOrphanedDeploys(env: Env): Promise<void> {
   const rows = await env.DB
-    .prepare("SELECT id, site_id, object_prefix FROM deploys WHERE status = 'superseded' AND object_prefix IS NOT NULL LIMIT 50")
+    .prepare(
+      `SELECT id, site_id, object_prefix
+       FROM deploys
+       WHERE object_prefix IS NOT NULL
+         AND status IN ('superseded', 'failed')
+       ORDER BY deployed_at ASC
+       LIMIT 25`
+    )
     .all<{ id: string; site_id: string; object_prefix: string }>();
 
   if (!rows.results?.length) return;
@@ -127,55 +195,28 @@ async function cleanupSupersededDeploys(env: Env): Promise<void> {
   }
 
   if (cleaned > 0) {
-    console.log(`[anti-entropy] cleaned R2 for ${cleaned} superseded deploy(s)`);
+    console.log(`[anti-entropy] cleaned R2 for ${cleaned} orphaned deploy(s)`);
   }
 }
 
-// Mark deploys that got stuck in 'uploading' for over an hour as failed.
-async function expireStuckDeploys(env: Env): Promise<void> {
-  const cutoff = Date.now() - 60 * 60 * 1000;
-  const result = await env.DB
-    .prepare("UPDATE deploys SET status = 'failed' WHERE status = 'uploading' AND deployed_at <= ?")
-    .bind(cutoff)
-    .run();
-  if (result.meta.changes > 0) {
-    console.log(`[anti-entropy] expired ${result.meta.changes} stuck deploy(s)`);
-  }
+// Prune expired checkout reservations and webhook idempotency records older
+// than 30 days (Stripe retries webhooks for at most 72 hours).
+async function cleanupBillingTables(env: Env): Promise<void> {
+  const nowSecs = Math.floor(Date.now() / 1000);
+  const webhookCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM billing_checkouts WHERE expires_at <= ?').bind(nowSecs),
+    env.DB.prepare('DELETE FROM stripe_webhook_events WHERE processed_at <= ?').bind(webhookCutoffMs),
+  ]);
 }
 
 // ── R2 cleanup ────────────────────────────────────────────────────────────────
 
 async function deleteSiteFiles(env: Env, userId: string, siteName: string): Promise<void> {
   if (!userId || !siteName) {
-    // Guard: never delete without a scoped prefix
     throw new Error(`Cannot delete site files: userId=${userId} siteName=${siteName}`);
   }
-
-  const prefix = `sites/${userId}/${siteName}/`;
-  let cursor: string | undefined;
-
-  do {
-    const list = await env.SITES.list({ prefix, limit: 1000, cursor });
-
-    if (list.objects.length > 0) {
-      const keys = list.objects.map(o => o.key);
-      await env.SITES.delete(keys);
-    }
-
-    cursor = list.truncated ? list.cursor : undefined;
-  } while (cursor);
-
-  // Verify site is marked deleted in D1 before returning
-  const site = await env.DB
-    .prepare("SELECT status FROM sites WHERE id = (SELECT id FROM sites WHERE user_id = ? AND name = ? LIMIT 1)")
-    .bind(userId, siteName)
-    .first<{ status: string }>();
-
-  // 'deactivated' is expected when called from reapDeactivatedSites — the status
-  // flip to 'deleted_cooling' happens after this function returns.
-  if (site && site.status !== 'deleted_cooling' && site.status !== 'deleted' && site.status !== 'deactivated') {
-    console.warn(`Unexpected site status after delete cleanup: ${site.status}`);
-  }
+  await deleteR2Prefix(env, `sites/${userId}/${siteName}/`);
 }
 
 async function deleteDeployFiles(env: Env, siteId: string, deployId: string): Promise<void> {
@@ -211,4 +252,3 @@ async function deleteR2Prefix(env: Env, prefix: string): Promise<void> {
     cursor = list.truncated ? list.cursor : undefined;
   } while (cursor);
 }
-

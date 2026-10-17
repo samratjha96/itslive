@@ -24,12 +24,18 @@ export async function deactivateSite(env: StatusEnv, siteId: string, siteName: s
   await invalidateKv(env.KV, siteName);
 }
 
-export async function restoreSite(env: StatusEnv, siteId: string, siteName: string): Promise<void> {
-  await env.DB
-    .prepare("UPDATE sites SET status = 'active', cooling_until = NULL WHERE id = ?")
-    .bind(siteId)
+export async function restoreSite(env: StatusEnv, siteId: string, siteName: string): Promise<boolean> {
+  const res = await env.DB
+    .prepare(
+      `UPDATE sites
+       SET status = 'active', cooling_until = NULL
+       WHERE id = ? AND status = 'deactivated' AND (cooling_until IS NULL OR cooling_until > ?)`
+    )
+    .bind(siteId, Date.now())
     .run();
+  if (res.meta.changes === 0) return false;
   await invalidateKv(env.KV, siteName);
+  return true;
 }
 
 const D1_BATCH_CHUNK_SIZE = 50;

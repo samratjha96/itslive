@@ -14,264 +14,71 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'X-API-Key', 'X-Cache-TTL', 'X-Site-Name'],
 }));
 
-app.get('/', c => c.json({ name: 'ItsLive API', version: '1.0.0', status: 'ok' }));
+app.get('/', c => c.json({ name: 'ItsLive API', version: '1.0.0', status: 'ok', docs: 'https://api.itslive.fyi/llms.txt' }));
 
 app.get('/llms.txt', c => {
   const base = 'https://api.itslive.fyi';
   return c.text(`# ItsLive API — Agent Instructions
 
-Deploy static websites to the public internet with a few API calls.
-No OAuth flows. No dashboards. No build step.
-
 Base URL: ${base}
+Auth Header: X-API-Key: il_live_... (never in URL query params; test keys use il_test_)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 0 — DO THIS FIRST, EVERY SESSION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+## 1. Onboarding & API Key
 Ask the user: "Do you already have an ItsLive API key?"
+- YES: use X-API-Key: il_live_... and skip to Section 2.
+- NO or LOST:
+  1. POST ${base}/signup {"email": "user@example.com"}
+     -> {"message": "Check your email for a verification code."} (includes "dev_code" in dev/test)
+  2. Ask the user for the 6-character code from their email.
+  3. POST ${base}/verify {"email": "user@example.com", "code": "ABC123"}
+     -> {"api_key": "il_live_...", "user_id": "..."}
+  4. Tell the user to save their key (it is only shown once). Previous keys remain valid for 60s on rotation.
 
-  YES  → Use it as: X-API-Key: il_live_...  Skip to STEP 2.
-  NO   → Follow STEP 1 to get one.
-  LOST → Same as NO. The signup+verify flow resets their key.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 1 — GET AN API KEY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Works identically for new accounts and lost-key recovery.
-
-1a. Request a verification code:
-    POST /signup
-    {"email": "user@example.com"}
-    → {"message": "Check your email for a verification code."}
-
-    Dev/test only: response also includes "dev_code": "ABC123".
-    Use it directly in step 1c — no email check needed.
-
-1b. Ask the user for the 6-character code from their email.
-
-1c. Exchange code for API key:
-    POST /verify
-    {"email": "user@example.com", "code": "ABC123"}
-    → {"api_key": "il_live_...", "user_id": "..."}
-
-1d. Tell the user to save their key (e.g. .env file or password manager).
-    Future sessions: paste it directly, skip verification.
-    The key will not be shown again.
-
-Note: /verify always issues a fresh key and marks the previous one rotated.
-The old key stays valid for 60 seconds so in-flight requests complete.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 2 — DEPLOY A SITE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+## 2. Create & Deploy a Site
 One-step create + deploy (recommended for new sites):
-    POST /sites
-    X-API-Key: il_live_...
-
-    Option A — JSON file map:
-      Content-Type: application/json
-      {"files": {"index.html": "<!doctype html>...", "style.css": "..."}}
-
-    Option B — Single file (raw body):
-      Content-Type: text/html         → saved as index.html
-      Content-Type: image/gif         → saved as image.gif
-      Content-Type: image/png         → saved as image.png
-      Content-Type: image/jpeg        → saved as image.jpg
-      Content-Type: image/webp        → saved as image.webp
-      Content-Type: image/svg+xml     → saved as image.svg
-      Content-Type: video/mp4         → saved as video.mp4
-      Content-Type: application/pdf   → saved as document.pdf
-      <file bytes>
-
-    Option C — ZIP archive or multipart form:
-      Content-Type: application/zip | multipart/form-data
-
-    → 201 {"name": "violet-crane-42", "url": "https://violet-crane-42.itslive.fyi",
-           "site_id": "...", "slug_type": "auto", "created_at": "...",
-           "deploy_id": "...", "deployed_at": "...", "size_bytes": ...,
-           "file_count": ..., "sha256": "..."}
-
-    Custom name (Pro plan): pass "name": "my-project" in JSON or X-Site-Name header.
-    Rules: 3–40 chars, lowercase alphanumeric and hyphens only.
-
-    (You can also create an empty site first with POST /sites {} and deploy in a separate step.)
-
-Update an existing site (or deploy after empty POST /sites):
-    PUT /sites/{name}
-    X-API-Key: il_live_...
-    Accepts the same payloads (JSON {"files": {...}}, raw file body, ZIP, or multipart).
-    → {"url": "...", "deploy_id": "...", "deployed_at": "...",
-       "size_bytes": ..., "file_count": ..., "sha256": "..."}
-
-Show the user the live URL.
-For HTML sites: root URL (https://{name}.itslive.fyi/) serves the page.
-For media files: access by direct path (https://{name}.itslive.fyi/image.gif).
-
-Deploys are atomic — old version stays live until new upload completes.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MANAGING SITES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-List sites (includes active, suspended, and deactivated):
-  GET /sites
-  → {"sites": [{"name", "url", "status", "slug_type",
-                "deployed_at", "password_protected"}]}
-
-Site details + last 5 deploys:
-  GET /sites/{name}
-  → {"name", "url", "status", "slug_type", "created_at", "deployed_at",
-     "active_deploy_id", "password_protected", "session_ttl_hrs",
-     "deploy_count", "last_5_deploys": [{"deploy_id", "deployed_at",
-     "size_bytes", "file_count", "sha256", "status"}]}
-
-Deactivate a site (soft delete — files preserved for 7 days):
-  DELETE /sites/{name}
-  → {"deactivated": true, "restorable_until": "2025-..."}
-  Site returns 404 immediately. Name is held; no one else can register it
-  during the restore window.
-
-Restore a deactivated site (must call before restorable_until):
-  POST /sites/{name}/restore
-  → {"restored": true, "url": "https://{name}.itslive.fyi"}
-  After restorable_until passes, files are purged automatically and the name
-  enters a 30-day cooling window before it becomes available to anyone.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SITE STATUS LIFECYCLE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  active         → serving traffic normally
-  suspended      → plan limit exceeded; site returns 402; upgrade plan to restore
-  deactivated    → soft-deleted; returns 404; restorable within 7 days
-  deleted_cooling → files purged; name held 30 days against squatting; returns 410
-  deleted        → fully gone; name available for registration
-
-Transitions:
-  active|suspended  →  DELETE            →  deactivated
-  deactivated       →  POST /restore      →  active  (within 7 days only)
-  deactivated       →  (cron, 7 days)     →  deleted_cooling
-  deleted_cooling   →  (cron, 30 days)    →  deleted
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PASSWORD PROTECTION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Enable:
-  PUT /sites/{name}/access
-  {"password": "min-8-chars", "session_ttl_hrs": 24}
-  session_ttl_hrs max: free=24, pro=720. Default: 24.
-  → {"password_protected": true, "session_ttl_hrs": 24}
-  All existing sessions are revoked immediately.
-
-Disable:
-  DELETE /sites/{name}/access
-  → {"password_protected": false}
-
-Revoke all sessions (keep password unchanged):
-  POST /sites/{name}/access/revoke
-  → {"sessions_revoked": 5}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ACCOUNT & KEYS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Account info:
-  GET /account
-  → {"user_id", "email", "plan", "created_at", "api_key_prefix"}
-
-Usage & quotas:
-  GET /usage
-  → {"plan", "sites": {"used", "limit"}, "storage_bytes": {"used", "limit"},
-     "deploys_this_month": {"used", "limit"}, "api_calls_this_hour": {"used", "limit"}}
-
-Rotate key (user has current key, wants a new one):
-  POST /keys/rotate
+  POST ${base}/sites
   X-API-Key: il_live_...
-  → {"api_key": "il_live_...(new)", "old_key_expires": <unix_seconds>}
-  Tell the user to save the new key. Old key valid 60 seconds.
+  - Option A (JSON file map): Content-Type: application/json
+    {"name"?: "my-project", "files": {"index.html": "<!doctype html>...", "style.css": "..."}}
+  - Option B (single raw file): Content-Type: text/html (index.html), image/png|gif|jpeg|webp|svg+xml, video/mp4, or application/pdf
+  - Option C (archive/form): Content-Type: application/zip or multipart/form-data (optional X-Site-Name header for custom name)
+  -> 201 {"site_id", "name", "url": "https://{name}.itslive.fyi", "slug_type", "created_at", "deploy_id", "deployed_at", "size_bytes", "file_count", "sha256"}
+  (You can also create an empty slot first with POST ${base}/sites {} and deploy via PUT later.)
 
-Upgrade to Pro ($10 one-time):
-  POST /billing/checkout
+Update an existing site (atomic deploy):
+  PUT ${base}/sites/{name}
   X-API-Key: il_live_...
-  → {"checkout_url": "https://checkout.stripe.com/...", "session_id": "..."}
-  Give checkout_url to the user. Once paid, the account upgrades to Pro automatically.
+  Accepts the same payloads (JSON {"files": {...}}, raw file body, ZIP, or multipart).
+  Optional header: X-Cache-TTL: 30..86400 (default 300s).
+  -> 200 {"url", "deploy_id", "deployed_at", "size_bytes", "file_count", "sha256"}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PLANS & LIMITS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 3. Manage Sites & Password Protection
+- List sites:       GET ${base}/sites -> {"sites": [{"name", "url", "status", "slug_type", "deployed_at", "password_protected"}]}
+- Site details:     GET ${base}/sites/{name} -> site info + last_5_deploys
+- Soft delete (7d): DELETE ${base}/sites/{name} -> {"deactivated": true, "restorable_until": "..."} (returns 404 immediately; name held 7d, then 30d cooling)
+- Restore site:     POST ${base}/sites/{name}/restore -> {"restored": true, "url": "..."}
+- Set password:     PUT ${base}/sites/{name}/access {"password": "min-8-chars", "session_ttl_hrs": 24} (max TTL: free=24h, pro=720h)
+- Remove password:  DELETE ${base}/sites/{name}/access
+- Revoke sessions:  POST ${base}/sites/{name}/access/revoke -> {"sessions_revoked": n}
 
-  free:    3 sites · 5 MB/deploy · 50 deploys/month · 100 API calls/hour · session TTL ≤ 24h
-  pro:     500 sites · 25 MB/deploy · unlimited deploys · 2,000 API calls/hour · session TTL ≤ 720h ($10 one-time)
+## 4. Account, Usage & Pro Upgrade
+- Account info:     GET ${base}/account -> {"user_id", "email", "plan", "created_at", "api_key_prefix"}
+- Usage & quotas:   GET ${base}/usage -> {"plan", "sites", "storage_bytes", "deploys_this_month", "api_calls_this_hour"}
+- Rotate API key:   POST ${base}/keys/rotate -> {"api_key": "il_live_...", "old_key_expires": <unix_secs>}
+- Upgrade to Pro ($10 one-time, lifetime):
+  * Via API (with X-API-Key): POST ${base}/billing/checkout -> {"checkout_url": "https://checkout.stripe.com/...", "session_id": "..."}
+  * Via browser (no key):     GET  ${base}/billing/checkout -> 303 redirect to Stripe Checkout
 
-Custom site names & search engine indexing: Pro plan.
-Suspended and active sites both count toward the site limit.
-Deactivated sites do NOT count toward the site limit.
+## 5. Plans & Limits
+- free ($0 forever):       3 active sites · 5 MB/deploy · 50 deploys/month · 100 API calls/hour · session TTL <= 24h · auto-generated slugs · noindex
+- pro ($10 one-time/life): 500 active sites · 25 MB/deploy · unlimited deploys · 2,000 API calls/hour · session TTL <= 720h · custom names (3-40 lowercase alphanumeric/hyphens) · search indexing enabled
 
-Rate limits (unauthenticated):
-  POST /signup: 10/10 min per IP (silently enforced — always returns success)
-  POST /verify: 10/10 min per IP · 5 wrong codes locks the OTP
-  POST /__auth (login): 10/15 min per IP+site
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ERROR CODES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-All errors: {"error": {"code": "...", "message": "..."}}
-
-Auth:
-  RATE_LIMITED                  → Wait Retry-After seconds, then retry
-  MISSING_KEY                   → Add X-API-Key header
-  INVALID_KEY                   → Key wrong or account missing; re-verify (Step 1)
-  KEY_IN_URL                    → Move key to header; URL params are rejected
-  KEY_ROTATED                   → Key expired after rotation; ask user for current key
-
-OTP:
-  CODE_INVALID                  → Wrong code; max 5 attempts before lockout
-  CODE_EXPIRED                  → OTP expired or locked; call POST /signup again
-  EMAIL_INVALID                 → Check email address format
-
-Sites:
-  SITE_NOT_FOUND                → Name wrong, or site is deactivated/purged
-  SITE_SUSPENDED                → Plan limit exceeded; upgrade to resume deploys
-  ALREADY_DEACTIVATED           → Already soft-deleted; POST /sites/{name}/restore to recover
-  SITE_IN_COOLING               → You own this name but it's in its 30-day cooling window
-  SITE_NOT_RESTORABLE           → Not found, already purged, or not deactivated
-
-Plan/limits:
-  PLAN_LIMIT_REACHED            → Check GET /usage or call POST /billing/checkout to upgrade to Pro ($10 one-time)
-  CUSTOM_SLUG_REQUIRES_PAID_PLAN → Omit "name" from POST /sites or call POST /billing/checkout to upgrade to Pro
-  ALREADY_PRO                   → Account is already on the Pro plan
-  NAME_TAKEN                    → Name in use or in cooling; choose a different name
-  NAME_INVALID                  → 3–40 chars, lowercase alphanumeric + hyphens only
-  NAME_RESERVED                 → Choose a different name
-
-Upload:
-  FILE_TOO_LARGE                → Reduce total size; free plan limit is 5 MB
-  TOO_MANY_FILES                → Max 100 files per deploy
-  NO_FILES                      → Request body has no file content
-  ENTRYPOINT_MISSING            → Deploy has HTML files but no index.html; add one or use a media-only deploy
-  INVALID_ZIP                   → ZIP is corrupt or not a valid archive
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AUTHENTICATION RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Header:  X-API-Key: il_live_{key}
-Never put the key in a URL — the API rejects it with KEY_IN_URL.
-Test environment keys use prefix il_test_ and behave identically.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SITE SERVING
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Sites served at: https://{name}.itslive.fyi
-SPA routing: missing paths fall back to index.html when it exists (HTML sites only)
-Cache TTL: 300s default · override per-deploy via X-Cache-TTL header on PUT /sites/{name} (30–86400s)
-Site names are permanent — no rename after creation
+## 6. Error Codes ({"error": {"code": "...", "message": "..."}})
+- Auth:   RATE_LIMITED (429), MISSING_KEY (401), INVALID_KEY (401), KEY_IN_URL (401), KEY_ROTATED (401)
+- OTP:    EMAIL_INVALID (400), CODE_INVALID (400), CODE_EXPIRED (400)
+- Sites:  SITE_NOT_FOUND (404), SITE_SUSPENDED (402), ALREADY_DEACTIVATED (409), SITE_IN_COOLING (409), SITE_NOT_RESTORABLE (404)
+- Limits: PLAN_LIMIT_REACHED (402), CUSTOM_SLUG_REQUIRES_PAID_PLAN (402), ALREADY_PRO (409), NAME_TAKEN (409), NAME_INVALID (400), NAME_RESERVED (409)
+- Upload: FILE_TOO_LARGE (413), TOO_MANY_FILES (400, max 100), NO_FILES (400), ENTRYPOINT_MISSING (400, index.html required when HTML files present), INVALID_ZIP (400)
 `);
 });
 
@@ -287,7 +94,7 @@ app.route('/', accountRouter);
 // Billing & Stripe webhook routes: /billing/checkout  /webhooks/stripe
 app.route('/', billingRouter);
 
-app.notFound(c => c.json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found.' } }, 404));
+app.notFound(c => c.json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found. See https://api.itslive.fyi/llms.txt' } }, 404));
 
 app.onError((err, c) => {
   console.error(err);
