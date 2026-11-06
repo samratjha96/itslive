@@ -10,6 +10,7 @@ declare module 'hono' {
 }
 
 const API_CALL_WINDOW_SECS = 3600;
+export const ROTATION_GRACE_MS = 60_000;
 
 function normalizePlan(rawPlan: string): AuthContext['plan'] {
   return rawPlan === 'free' ? 'free' : 'pro';
@@ -28,7 +29,7 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
   if (!raw) {
     return c.json({ error: { code: 'MISSING_KEY', message: 'X-API-Key header is required.' } }, 401);
   }
-  if (!raw.startsWith('il_live_') && !raw.startsWith('il_test_')) {
+  if (!raw.startsWith('il_live_')) {
     return c.json({ error: { code: 'INVALID_KEY', message: 'Invalid API key format.' } }, 401);
   }
 
@@ -55,12 +56,9 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
     return c.json({ error: { code: 'INVALID_KEY', message: 'API key not found.' } }, 401);
   }
 
-  // A rotated key is valid for 60s grace period after rotation
-  if (row.rotated_at) {
-    const gracePeriodMs = 60_000;
-    if (Date.now() - row.rotated_at > gracePeriodMs) {
-      return c.json({ error: { code: 'KEY_ROTATED', message: 'This key has been rotated. Use your new key.' } }, 401);
-    }
+  // A rotated key stays valid for a short grace period after rotation.
+  if (row.rotated_at && Date.now() - row.rotated_at > ROTATION_GRACE_MS) {
+    return c.json({ error: { code: 'KEY_ROTATED', message: 'This key has been rotated. Use your new key.' } }, 401);
   }
 
   const user = await c.env.DB
@@ -78,7 +76,10 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
     return c.json({ error: { code: 'RATE_LIMITED', message: 'Rate limit exceeded. Try again later.' } }, 429, { 'Retry-After': String(API_CALL_WINDOW_SECS) });
   }
 
-  await c.env.KV.put(`apikey:${keyHash}`, JSON.stringify({ user_id: row.user_id, plan, key_id: row.id }), { expirationTtl: 60 });
+  // Only cache keys that have not been rotated, so the cache can never extend a grace period.
+  if (!row.rotated_at) {
+    await c.env.KV.put(`apikey:${keyHash}`, JSON.stringify({ user_id: row.user_id, plan, key_id: row.id }), { expirationTtl: 60 });
+  }
   await c.env.DB.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').bind(Date.now(), row.id).run();
 
   c.set('auth', { userId: row.user_id, plan, keyId: row.id });

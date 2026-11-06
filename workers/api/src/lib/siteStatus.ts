@@ -24,14 +24,18 @@ export async function deactivateSite(env: StatusEnv, siteId: string, siteName: s
   await invalidateKv(env.KV, siteName);
 }
 
-export async function restoreSite(env: StatusEnv, siteId: string, siteName: string): Promise<boolean> {
+// Restoring counts against the plan's site limit exactly like creating a site,
+// so delete-then-restore cannot exceed the limit or revive a suspended site
+// beyond it.
+export async function restoreSite(env: StatusEnv, siteId: string, userId: string, siteName: string, siteLimit: number): Promise<boolean> {
   const res = await env.DB
     .prepare(
       `UPDATE sites
        SET status = 'active', cooling_until = NULL
-       WHERE id = ? AND status = 'deactivated' AND (cooling_until IS NULL OR cooling_until > ?)`
+       WHERE id = ? AND status = 'deactivated' AND (cooling_until IS NULL OR cooling_until > ?)
+         AND (SELECT COUNT(*) FROM sites WHERE user_id = ? AND status IN ('active', 'suspended')) < ?`
     )
-    .bind(siteId, Date.now())
+    .bind(siteId, Date.now(), userId, siteLimit)
     .run();
   if (res.meta.changes === 0) return false;
   await invalidateKv(env.KV, siteName);

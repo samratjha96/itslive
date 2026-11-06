@@ -9,6 +9,7 @@ const router = new Hono<{ Bindings: Env }>();
 
 const STRIPE_API_BASE = 'https://api.stripe.com/v1';
 const PRO_PRICE_CENTS = '1000'; // $10.00 one-time
+const PRO_PRODUCT = 'itslive_pro_lifetime';
 const CHECKOUT_LIFETIME_SECS = 1920; // 32 minutes (> Stripe's 30-minute minimum)
 
 async function stripeRequest<T>(
@@ -92,8 +93,8 @@ router.post('/billing/checkout', authMiddleware, async c => {
     }
     await c.env.DB.prepare('DELETE FROM billing_checkouts WHERE user_id = ?').bind(user.id).run();
     if (liveStatus === 'paid') {
-      await applyPlanChange(c.env, user.id, 'pro');
-      return c.json({ error: { code: 'ALREADY_PRO', message: 'Account is already on the Pro plan.' } }, 409);
+      // Entitlement is granted only by the webhook, which records the purchase.
+      return c.json({ error: { code: 'PAYMENT_PROCESSING', message: 'Payment received. Pro activates within a minute; retry GET /account shortly.' } }, 409);
     }
   }
 
@@ -149,6 +150,7 @@ router.post('/billing/checkout', authMiddleware, async c => {
     'line_items[0][quantity]': '1',
     client_reference_id: user.id,
     'metadata[user_id]': user.id,
+    'metadata[product]': PRO_PRODUCT,
     'payment_intent_data[metadata][user_id]': user.id,
     expires_at: String(activeAttempt.expires_at),
     success_url: `${baseUrl}/?upgraded=1`,
@@ -205,6 +207,7 @@ router.get('/billing/checkout', async c => {
     'line_items[0][price_data][product_data][name]': 'ItsLive Pro (Lifetime)',
     'line_items[0][price_data][product_data][description]': '500 sites, 25 MB per deploy, custom site names, unlimited deploys',
     'line_items[0][quantity]': '1',
+    'metadata[product]': PRO_PRODUCT,
     expires_at: String(expiresAt),
     success_url: `${baseUrl}/?upgraded=1`,
     cancel_url: `${baseUrl}/#pricing`,
@@ -236,7 +239,7 @@ interface StripeWebhookEvent {
       amount?: number;
       amount_refunded?: number;
       status?: string;
-      metadata?: { user_id?: string };
+      metadata?: { user_id?: string; product?: string };
     };
   };
 }
@@ -291,6 +294,10 @@ router.post('/webhooks/stripe', async c => {
       if (event.type === 'checkout.session.completed' && obj.payment_status !== 'paid') {
         break;
       }
+      // Only ItsLive Pro checkouts grant Pro, not any payment on the Stripe account.
+      if (obj.metadata?.product !== PRO_PRODUCT) {
+        break;
+      }
       const userId = await resolveOrCreateWebhookUser(c.env, metadataUserId, customerId, paymentIntentId, checkoutEmail);
       if (!userId) break;
 
@@ -311,7 +318,9 @@ router.post('/webhooks/stripe', async c => {
         .bind(piKey, userId, obj.id ?? null, customerId, now)
         .run();
 
-      if (customerId) {
+      // Only link the Stripe customer for checkouts started by the account itself;
+      // an anonymous payer must not attach their customer to someone else's account.
+      if (customerId && metadataUserId === userId) {
         await c.env.DB
           .prepare('UPDATE users SET stripe_id = ? WHERE id = ?')
           .bind(customerId, userId)
@@ -402,7 +411,8 @@ router.post('/webhooks/stripe', async c => {
     case 'charge.dispute.closed': {
       const userId = await resolveWebhookUserId(c.env, metadataUserId, customerId, paymentIntentId);
       const piKey = paymentIntentId ?? obj.id ?? event.id;
-      const disputeStatus = obj.status === 'won' ? 'won' : 'lost';
+      // 'warning_closed' (inquiry closed without a chargeback) keeps the funds, same as 'won'.
+      const disputeStatus = obj.status === 'lost' ? 'lost' : 'won';
 
       await c.env.DB
         .prepare(

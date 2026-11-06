@@ -27,9 +27,6 @@ export default {
           case 'existing_account_notice':
             await sendExistingAccountNotice(env.RESEND_API_KEY, body.email);
             break;
-          case 'site_delete_cleanup':
-            await deleteSiteFiles(env, body.user_id, body.site_name);
-            break;
           case 'deploy_cleanup':
             await deleteDeployFiles(env, body.site_id, body.deploy_id);
             break;
@@ -59,6 +56,7 @@ async function runAntiEntropy(env: Env): Promise<void> {
     ['cleanupOrphanedDeploys', () => cleanupOrphanedDeploys(env)],
     ['expireCoolingSites', () => expireCoolingSites(env)],
     ['cleanupBillingTables', () => cleanupBillingTables(env)],
+    ['cleanupExpiredOtps', () => cleanupExpiredOtps(env)],
   ];
 
   for (const [name, fn] of steps) {
@@ -208,6 +206,10 @@ async function cleanupBillingTables(env: Env): Promise<void> {
     env.DB.prepare('DELETE FROM billing_checkouts WHERE expires_at <= ?').bind(nowSecs),
     env.DB.prepare('DELETE FROM stripe_webhook_events WHERE processed_at <= ?').bind(webhookCutoffMs),
   ]);
+}
+
+async function cleanupExpiredOtps(env: Env): Promise<void> {
+  await env.DB.prepare('DELETE FROM otp_codes WHERE expires_at <= ?').bind(Date.now()).run();
 }
 
 // ── R2 cleanup ────────────────────────────────────────────────────────────────

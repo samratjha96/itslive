@@ -21,18 +21,18 @@ app.get('/llms.txt', c => {
   return c.text(`# ItsLive API — Agent Instructions
 
 Base URL: ${base}
-Auth Header: X-API-Key: il_live_... (never in URL query params; test keys use il_test_)
+Auth Header: X-API-Key: il_live_... (never in URL query params)
 
 ## 1. Onboarding & API Key
 Ask the user: "Do you already have an ItsLive API key?"
 - YES: use X-API-Key: il_live_... and skip to Section 2.
 - NO or LOST:
   1. POST ${base}/signup {"email": "user@example.com"}
-     -> {"message": "Check your email for a verification code."} (includes "dev_code" in dev/test)
+     -> {"message": "Check your email for a verification code."} (includes "dev_code" only when ENVIRONMENT=development)
   2. Ask the user for the 6-character code from their email.
   3. POST ${base}/verify {"email": "user@example.com", "code": "ABC123"}
      -> {"api_key": "il_live_...", "user_id": "..."}
-  4. Tell the user to save their key (it is only shown once). Previous keys remain valid for 60s on rotation.
+  4. Tell the user to save their key (it is only shown once). Previous keys remain valid for 60s on rotation. Signing in again by email revokes all previous keys immediately.
 
 ## 2. Create & Deploy a Site
 One-step create + deploy (recommended for new sites):
@@ -56,7 +56,7 @@ Update an existing site (atomic deploy):
 - List sites:       GET ${base}/sites -> {"sites": [{"name", "url", "status", "slug_type", "deployed_at", "password_protected"}]}
 - Site details:     GET ${base}/sites/{name} -> site info + last_5_deploys
 - Soft delete (7d): DELETE ${base}/sites/{name} -> {"deactivated": true, "restorable_until": "..."} (returns 404 immediately; name held 7d, then 30d cooling)
-- Restore site:     POST ${base}/sites/{name}/restore -> {"restored": true, "url": "..."}
+- Restore site:     POST ${base}/sites/{name}/restore -> {"restored": true, "url": "..."} (counts against the plan site limit; 402 PLAN_LIMIT_REACHED if full)
 - Set password:     PUT ${base}/sites/{name}/access {"password": "min-8-chars", "session_ttl_hrs": 24} (max TTL: free=24h, pro=720h)
 - Remove password:  DELETE ${base}/sites/{name}/access
 - Revoke sessions:  POST ${base}/sites/{name}/access/revoke -> {"sessions_revoked": n}

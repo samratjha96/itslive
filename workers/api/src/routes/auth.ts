@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { sha256, generateApiKey, generateOtp, timingSafeEqual } from '../lib/crypto';
 import { ulid } from '../lib/id';
 import type { Env } from '../types';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, invalidateUserKeyCache, ROTATION_GRACE_MS } from '../middleware/auth';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -109,11 +109,11 @@ router.post('/signup', async c => {
 
   const code = generateOtp();
 
-  // Invalidate any previous OTP for this email
-  await c.env.KV.delete(`otp:${emailHash}`);
-  await c.env.KV.delete(`verify_attempts:${emailHash}`);
-
-  await c.env.KV.put(`otp:${emailHash}`, code, { expirationTtl: OTP_TTL });
+  // One live code per email. D1 (not KV) so the attempt counter in /verify is atomic.
+  await c.env.DB
+    .prepare('INSERT OR REPLACE INTO otp_codes (email_hash, code_hash, attempts, expires_at) VALUES (?, ?, 0, ?)')
+    .bind(emailHash, await sha256(code), Date.now() + OTP_TTL * 1000)
+    .run();
 
   const existing = await c.env.DB
     .prepare('SELECT id FROM users WHERE email = ?')
@@ -125,9 +125,8 @@ router.post('/signup', async c => {
   }
   await c.env.QUEUE.send({ type: 'otp_email', email, code });
 
-  // In non-production environments, include the code in the response so agents
-  // can complete the flow without a real email inbox.
-  const isDev = c.env.ENVIRONMENT !== 'production' || c.env.ALLOW_DEV_CODES === 'true';
+  // Only an explicit development environment returns the code in the response.
+  const isDev = c.env.ENVIRONMENT === 'development';
   return c.json(isDev ? { ...SIGNUP_RESPONSE, dev_code: code } : SIGNUP_RESPONSE, 200);
 });
 
@@ -150,30 +149,32 @@ router.post('/verify', async c => {
   const { email, code } = parsed.data;
 
   const emailHash = await sha256(email);
-  const attemptsKey = `verify_attempts:${emailHash}`;
-  const otpKey = `otp:${emailHash}`;
+  const codeHash = await sha256(code);
 
-  const attempts = Number(await c.env.KV.get(attemptsKey) ?? '0');
-  if (attempts >= MAX_ATTEMPTS) {
-    return c.json({ error: { code: 'CODE_EXPIRED', message: 'Too many attempts. Please request a new code.' } }, 400);
+  // Count the attempt atomically before comparing, so concurrent guesses cannot exceed MAX_ATTEMPTS.
+  const otp = await c.env.DB
+    .prepare(
+      `UPDATE otp_codes SET attempts = attempts + 1
+       WHERE email_hash = ? AND expires_at > ? AND attempts < ?
+       RETURNING code_hash`
+    )
+    .bind(emailHash, Date.now(), MAX_ATTEMPTS)
+    .first<{ code_hash: string }>();
+  if (!otp) {
+    return c.json({ error: { code: 'CODE_EXPIRED', message: 'Code expired, not found, or too many attempts. Please request a new code.' } }, 400);
   }
-
-  const stored = await c.env.KV.get(otpKey);
-  if (!stored) {
-    return c.json({ error: { code: 'CODE_EXPIRED', message: 'Code expired or not found. Please request a new code.' } }, 400);
-  }
-
-  if (!timingSafeEqual(stored, code)) {
-    await c.env.KV.put(attemptsKey, String(attempts + 1), { expirationTtl: OTP_TTL });
-    if (attempts + 1 >= MAX_ATTEMPTS) {
-      await c.env.KV.delete(otpKey);
-    }
+  if (!timingSafeEqual(otp.code_hash, codeHash)) {
     return c.json({ error: { code: 'CODE_INVALID', message: 'Incorrect verification code.' } }, 400);
   }
 
-  // Success — consume OTP
-  await c.env.KV.delete(otpKey);
-  await c.env.KV.delete(attemptsKey);
+  // Consume the code. Only one concurrent request can win the delete.
+  const consumed = await c.env.DB
+    .prepare('DELETE FROM otp_codes WHERE email_hash = ? AND code_hash = ?')
+    .bind(emailHash, codeHash)
+    .run();
+  if (consumed.meta.changes === 0) {
+    return c.json({ error: { code: 'CODE_EXPIRED', message: 'Code already used. Please request a new code.' } }, 400);
+  }
 
   // Upsert user
   let user = await c.env.DB
@@ -203,10 +204,13 @@ router.post('/verify', async c => {
   const prefix = rawKey.substring(0, 15); // "il_live_" + 7 chars
   const keyId = ulid();
 
+  // Email recovery revokes every existing key immediately, with no grace period.
+  const revokedAt = now - ROTATION_GRACE_MS - 1;
   await c.env.DB
-    .prepare('UPDATE api_keys SET rotated_at = ? WHERE user_id = ? AND rotated_at IS NULL')
-    .bind(now, user.id)
+    .prepare('UPDATE api_keys SET rotated_at = ? WHERE user_id = ? AND (rotated_at IS NULL OR rotated_at > ?)')
+    .bind(revokedAt, user.id, revokedAt)
     .run();
+  await invalidateUserKeyCache(c.env, user.id);
 
   await c.env.DB
     .prepare('INSERT INTO api_keys (id, user_id, key_hash, prefix, created_at) VALUES (?, ?, ?, ?, ?)')
@@ -219,24 +223,32 @@ router.post('/verify', async c => {
 });
 
 router.post('/keys/rotate', authMiddleware, async c => {
-  const { userId, keyId, plan } = c.get('auth');
+  const { userId, keyId } = c.get('auth');
   const now = Date.now();
   const rawKey = generateApiKey();
   const keyHash = await sha256(rawKey);
   const prefix = rawKey.substring(0, 15);
   const newKeyId = ulid();
 
-  await c.env.DB
-    .prepare('UPDATE api_keys SET rotated_at = ? WHERE id = ?')
-    .bind(now, keyId)
-    .run();
+  // Only an unrotated key may rotate. A key already in its grace period cannot
+  // restart its own grace or mint a successor.
+  const [rotated] = await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE api_keys SET rotated_at = ? WHERE id = ? AND rotated_at IS NULL').bind(now, keyId),
+    c.env.DB
+      .prepare(
+        `INSERT INTO api_keys (id, user_id, key_hash, prefix, created_at)
+         SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM api_keys WHERE id = ? AND rotated_at = ?)`
+      )
+      .bind(newKeyId, userId, keyHash, prefix, now, keyId, now),
+  ]);
+  if (rotated.meta.changes === 0) {
+    return c.json({ error: { code: 'KEY_ROTATED', message: 'This key has already been rotated. Use your new key.' } }, 401);
+  }
 
-  await c.env.DB
-    .prepare('INSERT INTO api_keys (id, user_id, key_hash, prefix, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(newKeyId, userId, keyHash, prefix, now)
-    .run();
-
-  await c.env.KV.put(`apikey:${keyHash}`, JSON.stringify({ user_id: userId, plan, key_id: newKeyId }), { expirationTtl: 60 });
+  // Drop the old key from the auth cache so its grace period is enforced from D1.
+  // The new key is not pre-cached: its first request reads the current plan from D1.
+  const oldKey = await c.env.DB.prepare('SELECT key_hash FROM api_keys WHERE id = ?').bind(keyId).first<{ key_hash: string }>();
+  if (oldKey) await c.env.KV.delete(`apikey:${oldKey.key_hash}`);
 
   return c.json({ api_key: rawKey, old_key_expires: Math.floor(now / 1000) + 60 }, 200);
 });

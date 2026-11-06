@@ -37,6 +37,9 @@ const SECURITY_HEADERS: Record<string, string> = {
 };
 
 const SERVE_DOMAIN = 'itslive.fyi';
+const SESSION_COOKIE = '__Host-ph_session';
+// Mirrors PLAN_LIMITS[plan].session_ttl_hrs in workers/api/src/lib/limits.ts.
+const MAX_SESSION_TTL_HRS = { free: 24, pro: 720 } as const;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -153,12 +156,15 @@ async function lookupSite(env: Env, name: string): Promise<SiteRecord | null> {
 // ── Session management ────────────────────────────────────────────────────────
 
 async function getValidSession(request: Request, env: Env, site: SiteRecord): Promise<boolean> {
-  const cookie = parseCookie(request.headers.get('Cookie') ?? '', '__ph_session');
-  if (!cookie) return false;
-
-  const tokenHash = await sha256(cookie);
-  const session = await env.KV.get(`session:${site.id}:${tokenHash}`, 'json') as { expires_at: number } | null;
-  return session !== null && session.expires_at > Date.now();
+  // __Host- cookies cannot carry a Domain attribute, so a sibling tenant site
+  // cannot plant one for this host. Check every value present (bounded).
+  const tokens = parseCookies(request.headers.get('Cookie') ?? '', SESSION_COOKIE).slice(0, 3);
+  for (const token of tokens) {
+    const tokenHash = await sha256(token);
+    const session = await env.KV.get(`session:${site.id}:${tokenHash}`, 'json') as { expires_at: number } | null;
+    if (session !== null && session.expires_at > Date.now()) return true;
+  }
+  return false;
 }
 
 async function handleLogin(request: Request, env: Env, site: SiteRecord): Promise<Response> {
@@ -188,7 +194,7 @@ async function handleLogin(request: Request, env: Env, site: SiteRecord): Promis
 
   if (!row?.password_hash) {
     // Site no longer password protected — redirect to content
-    return Response.redirect('/', 302);
+    return new Response(null, { status: 302, headers: { Location: '/' } });
   }
 
   const valid = await verifyPassword(password, row.password_hash);
@@ -206,19 +212,21 @@ async function handleLogin(request: Request, env: Env, site: SiteRecord): Promis
 
   const token = generateToken();
   const tokenHash = await sha256(token);
-  const expiresAt = Date.now() + site.session_ttl_hrs * 3600 * 1000;
+  // Clamp to the owner's current plan so a TTL set while on Pro does not outlive a downgrade.
+  const ttlHrs = Math.min(site.session_ttl_hrs, MAX_SESSION_TTL_HRS[site.plan]);
+  const expiresAt = Date.now() + ttlHrs * 3600 * 1000;
 
   await env.KV.put(
     `session:${site.id}:${tokenHash}`,
     JSON.stringify({ created_at: Date.now(), expires_at: expiresAt }),
-    { expirationTtl: site.session_ttl_hrs * 3600 },
+    { expirationTtl: ttlHrs * 3600 },
   );
 
   return new Response(null, {
     status: 302,
     headers: {
       Location: '/',
-      'Set-Cookie': `__ph_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+      'Set-Cookie': `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/`,
       'Cache-Control': 'no-store, no-cache',
     },
   });
@@ -229,11 +237,8 @@ async function handleLogin(request: Request, env: Env, site: SiteRecord): Promis
 async function serveFile(env: Env, site: SiteRecord, filePath: string, request: Request): Promise<Response> {
   const prefix = `sites/${site.user_id}/${site.name}/${site.active_deploy_id}`;
   const r2Key = `${prefix}/${filePath}`;
-  const object = await env.SITES.get(r2Key, {
-    onlyIf: {
-      etagMatches: request.headers.get('If-None-Match') ?? undefined,
-    },
-  });
+  // R2 parses If-None-Match (quoted ETags, weak tags, lists) from the headers itself.
+  const object = await env.SITES.get(r2Key, { onlyIf: request.headers });
 
   if (!object) {
     // Try index.html fallback for SPA routing
@@ -402,12 +407,15 @@ function sanitizeFilePath(raw: string): string | null {
   return safe.length === 0 ? 'index.html' : safe.join('/');
 }
 
-function parseCookie(header: string, name: string): string | null {
+function parseCookies(header: string, name: string): string[] {
+  const values: string[] = [];
   for (const part of header.split(';')) {
-    const [k, v] = part.trim().split('=');
-    if (k?.trim() === name) return decodeURIComponent(v?.trim() ?? '');
+    const eq = part.indexOf('=');
+    if (eq === -1 || part.slice(0, eq).trim() !== name) continue;
+    const value = part.slice(eq + 1).trim();
+    if (value) values.push(value);
   }
-  return null;
+  return values;
 }
 
 async function sha256(text: string): Promise<string> {

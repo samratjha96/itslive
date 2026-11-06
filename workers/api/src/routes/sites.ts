@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { unzipSync } from 'fflate';
+import { Inflate } from 'fflate';
 import { sha256, sha256Bytes, hashPassword } from '../lib/crypto';
 import { ulid } from '../lib/id';
 import { generateSlug, RESERVED_NAMES, SLUG_PATTERN } from '../lib/words';
@@ -252,7 +252,7 @@ router.get('/:name', async c => {
 // ── POST /sites/:name/restore ─────────────────────────────────────────────────
 
 router.post('/:name/restore', async c => {
-  const { userId } = c.get('auth');
+  const { userId, plan } = c.get('auth');
   const name = c.req.param('name');
 
   const site = await c.env.DB
@@ -264,8 +264,16 @@ router.post('/:name/restore', async c => {
     return c.json({ error: { code: 'SITE_NOT_RESTORABLE', message: 'Site not found, already purged, or not in a deactivated state.' } }, 404);
   }
 
-  const restored = await restoreSite(c.env, site.id, name);
+  const limit = PLAN_LIMITS[plan].sites;
+  const restored = await restoreSite(c.env, site.id, userId, name, limit);
   if (!restored) {
+    const count = await c.env.DB
+      .prepare("SELECT COUNT(*) AS n FROM sites WHERE user_id = ? AND status IN ('active', 'suspended')")
+      .bind(userId)
+      .first<{ n: number }>();
+    if ((count?.n ?? 0) >= limit) {
+      return c.json({ error: { code: 'PLAN_LIMIT_REACHED', message: `Site limit (${limit}) reached. Delete another site or call POST /billing/checkout to upgrade to Pro before restoring.` } }, 402);
+    }
     return c.json({ error: { code: 'SITE_NOT_RESTORABLE', message: 'Site not found, already purged, or not in a deactivated state.' } }, 404);
   }
   return c.json({ restored: true, url: siteUrl(c.env.SERVE_DOMAIN, name) });
@@ -460,18 +468,12 @@ async function parseDeployPayload(c: Context<{ Bindings: Env }>, plan: Plan): Pr
 
   if (contentType.startsWith('application/zip') || contentType === 'application/octet-stream') {
     const bytes = new Uint8Array(await c.req.arrayBuffer());
-    const declaredSize = getZipDeclaredUncompressedSize(bytes);
-    if (declaredSize > planSizeBytes) {
-      return tooLarge();
-    }
-
-    let unzipped: Record<string, Uint8Array>;
-    try {
-      unzipped = unzipSync(bytes);
-    } catch {
+    const unzipped = extractZip(bytes, planSizeBytes);
+    if (unzipped === 'too_large') return tooLarge();
+    if (unzipped === 'invalid') {
       return { ok: false, error: { status: 400, code: 'INVALID_ZIP', message: 'Could not parse ZIP archive.' } };
     }
-    for (const [rawPath, data] of Object.entries(unzipped)) {
+    for (const [rawPath, data] of unzipped) {
       if (rawPath.endsWith('/')) continue;
       const safePath = sanitizePath(rawPath);
       if (!safePath) return { ok: false, error: { status: 400, code: 'INVALID_BODY', message: 'Invalid file path in ZIP archive.' } };
@@ -569,16 +571,18 @@ async function executeDeploy(
       )
       .bind(now, deployId, site.id, deployId),
   ];
-  if (site.active_deploy_id) {
-    flipStatements.push(
-      c.env.DB
-        .prepare(
-          `UPDATE deploys SET status = 'superseded'
-           WHERE id = ? AND EXISTS (SELECT 1 FROM deploys WHERE id = ? AND status = 'active')`
-        )
-        .bind(site.active_deploy_id, deployId),
-    );
-  }
+  // Supersede every other active deploy of this site, not just the one read at
+  // request start, so a concurrent deploy can never leave an unreferenced
+  // 'active' deploy whose files cleanup would skip.
+  flipStatements.push(
+    c.env.DB
+      .prepare(
+        `UPDATE deploys SET status = 'superseded'
+         WHERE site_id = ? AND status = 'active' AND id != ?
+           AND EXISTS (SELECT 1 FROM deploys WHERE id = ? AND status = 'active')`
+      )
+      .bind(site.id, deployId, deployId),
+  );
   const batchResults = await c.env.DB.batch(flipStatements);
   if (batchResults[0]?.meta.changes === 0) {
     throw new Error('DEPLOY_EXPIRED');
@@ -729,47 +733,102 @@ function inferContentType(path: string): string {
   return types[ext ?? ''] ?? 'application/octet-stream';
 }
 
-// Reads declared uncompressed sizes from the ZIP central directory without
-// decompressing. Returns the total, or Infinity if the file is unparseable.
-// This catches ZIP bombs before unzipSync ever runs.
-function getZipDeclaredUncompressedSize(bytes: Uint8Array): number {
-  if (bytes.length < 22) return Infinity;
+const MAX_ZIP_ENTRIES = 1000;
+const INFLATE_CHUNK_BYTES = 4096;
+
+class ZipRejected extends Error {
+  constructor(readonly reason: 'invalid' | 'too_large') { super(reason); }
+}
+
+// Extracts a ZIP archive while enforcing maxBytes on the bytes actually
+// inflated, not the sizes the archive declares. The parser is strict: it walks
+// exactly the entry count in the end-of-central-directory record, requires every
+// signature to match, rejects ZIP64, encryption, unknown compression methods,
+// overlapping entries and size mismatches. DEFLATE input is fed in small chunks
+// so a high-ratio stream is stopped as soon as the budget is crossed.
+function extractZip(bytes: Uint8Array, maxBytes: number): Map<string, Uint8Array> | 'invalid' | 'too_large' {
+  if (bytes.length < 22) return 'invalid';
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-  // Locate End of Central Directory record (signature 0x06054b50, little-endian).
-  // It sits at most 65558 bytes from the end (max comment length + fixed size).
-  let eocdOffset = -1;
-  const searchStart = Math.max(0, bytes.length - 65558);
-  for (let i = bytes.length - 22; i >= searchStart; i--) {
-    if (view.getUint32(i, true) === 0x06054b50) {
-      eocdOffset = i;
-      break;
-    }
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65558); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
   }
-  if (eocdOffset === -1) return Infinity;
+  if (eocd === -1) return 'invalid';
+  if (view.getUint16(eocd + 4, true) !== 0 || view.getUint16(eocd + 6, true) !== 0) return 'invalid'; // multi-disk
+  const entryCount = view.getUint16(eocd + 10, true);
+  const cdSize = view.getUint32(eocd + 12, true);
+  const cdOffset = view.getUint32(eocd + 16, true);
+  if (entryCount === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) return 'invalid'; // ZIP64
+  if (entryCount !== view.getUint16(eocd + 8, true) || entryCount > MAX_ZIP_ENTRIES) return 'invalid';
+  if (cdOffset + cdSize > eocd) return 'invalid';
 
-  const cdOffset = view.getUint32(eocdOffset + 16, true);
-  const cdSize   = view.getUint32(eocdOffset + 12, true);
-  if (cdOffset + cdSize > bytes.length) return Infinity;
-
+  const files = new Map<string, Uint8Array>();
+  const seenOffsets = new Set<number>();
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
   let total = 0;
   let pos = cdOffset;
-  const end = cdOffset + cdSize;
 
-  while (pos + 46 <= end) {
-    if (view.getUint32(pos, true) !== 0x02014b50) break; // central directory entry signature
-    const uncompressedSize = view.getUint32(pos + 24, true);
-    // 0xFFFFFFFF signals ZIP64 — treat as unknown and let post-extraction check handle it
-    if (uncompressedSize === 0xFFFFFFFF) return Infinity;
-    total += uncompressedSize;
-    if (total > 200 * 1024 * 1024) return total; // early-exit past any reasonable plan limit
-    const fileNameLen = view.getUint16(pos + 28, true);
-    const extraLen   = view.getUint16(pos + 30, true);
-    const commentLen = view.getUint16(pos + 32, true);
-    pos += 46 + fileNameLen + extraLen + commentLen;
+  try {
+    for (let n = 0; n < entryCount; n++) {
+      if (pos + 46 > cdOffset + cdSize || view.getUint32(pos, true) !== 0x02014b50) return 'invalid';
+      const flags = view.getUint16(pos + 8, true);
+      const method = view.getUint16(pos + 10, true);
+      const compSize = view.getUint32(pos + 20, true);
+      const size = view.getUint32(pos + 24, true);
+      const nameLen = view.getUint16(pos + 28, true);
+      const extraLen = view.getUint16(pos + 30, true);
+      const commentLen = view.getUint16(pos + 32, true);
+      const localOffset = view.getUint32(pos + 42, true);
+      if (pos + 46 + nameLen > cdOffset + cdSize) return 'invalid';
+      const name = decoder.decode(bytes.subarray(pos + 46, pos + 46 + nameLen));
+      pos += 46 + nameLen + extraLen + commentLen;
+
+      if (flags & 0x1) return 'invalid'; // encrypted
+      if (seenOffsets.has(localOffset) || files.has(name)) return 'invalid';
+      seenOffsets.add(localOffset);
+
+      if (localOffset + 30 > cdOffset || view.getUint32(localOffset, true) !== 0x04034b50) return 'invalid';
+      const dataStart = localOffset + 30 + view.getUint16(localOffset + 26, true) + view.getUint16(localOffset + 28, true);
+      if (dataStart + compSize > cdOffset) return 'invalid';
+      const data = bytes.subarray(dataStart, dataStart + compSize);
+
+      if (total + size > maxBytes) return 'too_large';
+
+      let out: Uint8Array;
+      if (method === 0) {
+        if (compSize !== size) return 'invalid';
+        out = data;
+      } else if (method === 8) {
+        const parts: Uint8Array[] = [];
+        let produced = 0;
+        const inflater = new Inflate(chunk => {
+          produced += chunk.length;
+          if (total + produced > maxBytes) throw new ZipRejected('too_large');
+          if (produced > size) throw new ZipRejected('invalid');
+          parts.push(chunk);
+        });
+        for (let off = 0; off < data.length; off += INFLATE_CHUNK_BYTES) {
+          const end = Math.min(off + INFLATE_CHUNK_BYTES, data.length);
+          inflater.push(data.subarray(off, end), end === data.length);
+        }
+        if (data.length === 0) inflater.push(new Uint8Array(0), true);
+        if (produced !== size) return 'invalid';
+        out = new Uint8Array(produced);
+        let o = 0;
+        for (const part of parts) { out.set(part, o); o += part.length; }
+      } else {
+        return 'invalid';
+      }
+
+      total += out.length;
+      files.set(name, out);
+    }
+  } catch (err) {
+    return err instanceof ZipRejected ? err.reason : 'invalid';
   }
 
-  return total;
+  return files;
 }
 
 export default router;

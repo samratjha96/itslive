@@ -6,7 +6,6 @@ export interface Env {
   RESEND_API_KEY: string;
   SERVE_DOMAIN: string;
   ENVIRONMENT: string;
-  ALLOW_DEV_CODES?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
 }
